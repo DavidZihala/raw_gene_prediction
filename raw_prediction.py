@@ -114,12 +114,13 @@ def get_insertions(q_sequence, h_sequence, h_start):
         # looking for 'deletions' in query sequence in alignment
         start, end = [m.start(), m.end()]
         real_start = (start - h_sequence[:start].count('-'))*3
-        insertions.append([real_start+h_start,
-                           real_start+h_start+(end-start)*3])
+        insertions.append((real_start+h_start,
+                           real_start+h_start+(end-start)*3))
+    print('insertions:', insertions)
     return insertions
 
 
-def find_inframe_intron(intron_position, contig_seq):
+def potential_inframe_intron(intron_position, contig_seq):
     """Gives you potentional in-frame intron sequence.
     Input: potentional intron position (tuple of two int, start and stop),
     contig seq (str)
@@ -132,7 +133,7 @@ def find_inframe_intron(intron_position, contig_seq):
         start = base_start - 10
     else:
         start = base_start
-    if base_end + 10 <= len(contig):
+    if base_end + 10 <= len(contig_seq):
         end = base_end + 10
     else:
         end = base_end
@@ -147,11 +148,18 @@ def find_inframe_intron(intron_position, contig_seq):
             if (len(intron) > 4 and len(intron) % 3 == 0):
                 potential_introns.append(str(intron))
     potential_introns.append('')
+    print(('potential_introns', potential_introns))
     return potential_introns
 
 
 def in_frame_introns(hsp, contig_name, h_len):
-    """Uses find_inframe_intron to gives you all in-frame introns from one hsp."""
+    """Uses potential_inframe_intron to gives you
+    all in-frame introns from one hsp. It tries all possible intron combination
+    and return the best combination accordint to distance:
+    abs(query without dashes + dashes where introns was not found) - len of
+    new protein.
+    Input: hsp Bio.Blast object, contig name, length of hit (contig)
+    Returns: list of best intron combination e.g. ['GTDSFSAG', '', 'GTSDSAG]"""
     q_frame, h_frame = hsp.frame
     h_sequence = str(hsp.sbjct)
     h_start = hsp.sbjct_start
@@ -161,15 +169,23 @@ def in_frame_introns(hsp, contig_name, h_len):
         h_start = h_len - h_end + 1
         h_end = h_len - fake_start + 1
     q_sequence = str(hsp.query)
+    # all insertions gives you list of tuples e.g. [(0,9), (30-90)]
     intron_positions = get_insertions(q_sequence, h_sequence, h_start)
+    print(intron_positions)
+
+    distance_dict = {} # important for distance counting
+    for count, position in enumerate(intron_positions):
+        distance_dict[count] = int((position[1] - position[0])/3)
 
     potential_introns = []
     intron_sequences = []
     if intron_positions:
+        # gives you hit sequence in correct orientation
         contig_seq = get_correct_orientation(contig_name, h_frame)
         intron_sequences = []
+        # gives you intron sequence in nucleotides
         for intron_position in intron_positions:
-            intron_seq = find_inframe_intron(intron_position, contig_seq)
+            intron_seq = potential_inframe_intron(intron_position, contig_seq)
             potential_introns.append(intron_seq)
 
         lower_distance = 500  # arbitrary used random high number
@@ -179,21 +195,15 @@ def in_frame_introns(hsp, contig_name, h_len):
                     test_seq = test_seq.replace(i, '')
                 protein = get_translation(test_seq)
                 if '*' not in protein:
-                    distance = abs((len(str(hsp.query).replace('-', ''))
-                                    - len(protein)))
+                    query_length = len(str(hsp.query).replace('-', ''))
+                    for count, value in enumerate(combination):
+                        if not value:
+                            query_length += distance_dict[count]
+                    distance = abs(query_length - len(protein))
                     if distance < lower_distance:
+                        lower_distance = distance
                         intron_sequences = list(combination)
     return intron_sequences
-
-
-def get_blast_iteration(num, database):
-    """Gives you only one blast iteration specified by number.
-    Only for testing."""
-    n = 0
-    while n < num:
-        sample = next(database)
-        n += 1
-    return sample
 
 
 def get_introns_all_hsps(sample, hit_num):
@@ -212,6 +222,33 @@ def get_introns_all_hsps(sample, hit_num):
             all_introns_no_none.append(i)
 
     return all_introns_no_none
+
+
+
+query_dataset = read_proteins('TEST_ABCE_one')
+genome_dict = read_genome('Metopus_genome_R1R21.fasta') 
+org_name = "Metopus"
+gene_dict = {}
+blastout = open('Metopus_TEST_one.xml')
+
+
+for blast_record in NCBIXML.parse(blastout):
+    gene_name = blast_record.query.split('_')[-1]
+    test = blast_record.alignments[0].hsps[0]
+    if gene_name not in gene_dict:
+        gene_dict[gene_name] = Gene(gene_name)
+    gene_dict[gene_name].add_blast(blast_record)
+
+
+
+samples = gene_dict['ABCE'].best_blast_hits
+for sample in samples:
+    print(get_introns_all_hsps(sample, 0))
+
+
+
+
+
 
 
 def similarity(seq):
@@ -381,41 +418,39 @@ def get_protein_predictions(genome_dict, sample, hit_num):
     else:
         return(get_translation(result_sequence))
 
-    
-query_dataset = read_proteins('TEST_ABCE')
-genome_dict = read_genome('Metopus_genome_R1R21.fasta') 
-org_name = "Metopus"
-gene_dict = {}
 
-blastout = open('Metopus_TEST.xml')
-for blast_record in NCBIXML.parse(blastout):
-    gene_name = blast_record.query.split('_')[-1]
-    try:
-        test = blast_record.alignments[0].hsps[0]
-        if gene_name not in gene_dict:
-            gene_dict[gene_name] = Gene(gene_name)
-        gene_dict[gene_name].add_blast(blast_record)
-    except:
-        pass
+#query_dataset = read_proteins('TEST_ABCE')
+#genome_dict = read_genome('Metopus_genome_R1R21.fasta') 
+#org_name = "Metopus"
+#gene_dict = {}
+#blastout = open('Metopus_TEST.xml')
+
+
+#for blast_record in NCBIXML.parse(blastout):
+#    gene_name = blast_record.query.split('_')[-1]
+#    test = blast_record.alignments[0].hsps[0]
+#    if gene_name not in gene_dict:
+#        gene_dict[gene_name] = Gene(gene_name)
+#    gene_dict[gene_name].add_blast(blast_record)
 
 
 
-with open('Metopus_predictions_TEST.fasta', 'w') as res:
-    for gene in gene_dict:
-        samples = gene_dict[gene].best_blast_hits
-        contig_dict = {}
-        for sample in samples:
-            contig = sample.alignments[0].hit_id
-            seq = get_protein_predictions(genome_dict, sample, 0)
-            evalue = sample.alignments[0].hsps[0].expect
-            if contig not in contig_dict and '*' not in seq:
-                contig_dict[contig] = seq
-                min_eval = evalue
-            elif '*' in seq:
-                pass
-            else:
-                if len(seq) > len(contig_dict[contig]) and '*' not in seq:
-                    contig_dict[contig] = seq
-        for contig, protein in contig_dict.items():
-            res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene, 
-                      sample.query, contig, protein))
+#with open('Metopus_predictions_TEST.fasta', 'w') as res:
+#    for gene in gene_dict:
+#        samples = gene_dict[gene].best_blast_hits
+#        contig_dict = {}
+#        for sample in samples:
+#            contig = sample.alignments[0].hit_id
+#            seq = get_protein_predictions(genome_dict, sample, 0)
+#            evalue = sample.alignments[0].hsps[0].expect
+#            if contig not in contig_dict and '*' not in seq:
+#                contig_dict[contig] = seq
+#                min_eval = evalue
+#            elif '*' in seq:
+#                pass
+#            else:
+#                if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+#                    contig_dict[contig] = seq
+#        for contig, protein in contig_dict.items():
+#            res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene, 
+#                      sample.query, contig, protein))
