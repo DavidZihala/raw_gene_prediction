@@ -116,7 +116,6 @@ def get_insertions(q_sequence, h_sequence, h_start):
         real_start = (start - h_sequence[:start].count('-'))*3
         insertions.append((real_start+h_start,
                            real_start+h_start+(end-start)*3))
-    print('insertions:', insertions)
     return insertions
 
 
@@ -148,7 +147,6 @@ def potential_inframe_intron(intron_position, contig_seq):
             if (len(intron) > 4 and len(intron) % 3 == 0):
                 potential_introns.append(str(intron))
     potential_introns.append('')
-    print(('potential_introns', potential_introns))
     return potential_introns
 
 
@@ -171,9 +169,8 @@ def in_frame_introns(hsp, contig_name, h_len):
     q_sequence = str(hsp.query)
     # all insertions gives you list of tuples e.g. [(0,9), (30-90)]
     intron_positions = get_insertions(q_sequence, h_sequence, h_start)
-    print(intron_positions)
 
-    distance_dict = {} # important for distance counting
+    distance_dict = {}  # important for distance counting
     for count, position in enumerate(intron_positions):
         distance_dict[count] = int((position[1] - position[0])/3)
 
@@ -189,6 +186,7 @@ def in_frame_introns(hsp, contig_name, h_len):
             potential_introns.append(intron_seq)
 
         lower_distance = 500  # arbitrary used random high number
+        # test combinations of potential introns
         for combination in list(itertools.product(*potential_introns)):
                 test_seq = str(contig_seq[h_start-1:h_end])
                 for i in combination:
@@ -207,7 +205,9 @@ def in_frame_introns(hsp, contig_name, h_len):
 
 
 def get_introns_all_hsps(sample, hit_num):
-    """gives you all in-frame introns for all hsps."""
+    """gives you all in-frame introns for all hsps.
+    Input: blast class from Biopython
+    Returns: list of best in-frame intron candidates """
     contig_name = sample.alignments[hit_num].hit_id
     h_len = sample.alignments[hit_num].length
     all_introns = []
@@ -215,7 +215,6 @@ def get_introns_all_hsps(sample, hit_num):
         intron_seqs = in_frame_introns(hsp, contig_name, h_len)
         if intron_seqs:
             all_introns += intron_seqs
-
     all_introns_no_none = []
     for i in all_introns:
         if i != 'None':
@@ -224,42 +223,10 @@ def get_introns_all_hsps(sample, hit_num):
     return all_introns_no_none
 
 
-
-query_dataset = read_proteins('TEST_ABCE_one')
-genome_dict = read_genome('Metopus_genome_R1R21.fasta') 
-org_name = "Metopus"
-gene_dict = {}
-blastout = open('Metopus_TEST_one.xml')
-
-
-for blast_record in NCBIXML.parse(blastout):
-    gene_name = blast_record.query.split('_')[-1]
-    test = blast_record.alignments[0].hsps[0]
-    if gene_name not in gene_dict:
-        gene_dict[gene_name] = Gene(gene_name)
-    gene_dict[gene_name].add_blast(blast_record)
-
-
-
-samples = gene_dict['ABCE'].best_blast_hits
-for sample in samples:
-    print(get_introns_all_hsps(sample, 0))
-
-
-
-
-
-
-
-def similarity(seq):
-    space = seq.count(" ")
-    plus = seq.count("+")
-    result = len(seq)-(space+plus)
-    return result
-
-
 def get_hsps_coordinates(sample, hit_num):
-    """Gives you sorted (increasing) coordinates off all hsps"""
+    """Gives you sorted and corrected (according to similarity/identity) 
+    coordinates off all hsps. Crucial function. Huge problem with multiple hits.
+    """
     global_start = 500000
     global_end = 0
     pseudo_coordinates = {}
@@ -273,7 +240,6 @@ def get_hsps_coordinates(sample, hit_num):
         middline = hsp.match
         q_start = hsp.query_start
         q_end = hsp.query_end
-        q_frame, h_frame = hsp.frame
         if h_frame < 0:
             fake_start = h_start
             h_start = h_len - h_end + 1
@@ -285,23 +251,24 @@ def get_hsps_coordinates(sample, hit_num):
         pseudo_coordinates[q_start] = [int(h_start), int(h_end), str(middline)]
         query_coordinates_unsorted.append([q_start, q_end])
 
-    query_coordinates = sorted(query_coordinates_unsorted)
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
+    query_coordinates = sorted(query_coordinates_unsorted)
 
-    iter_dict = {}
     n = 0
-    for i in pseudo_coordinates_sorted:
-        iter_dict[n] = i
-        n += 1
+    iter_dict = {}
+    for count, item in enumerate(pseudo_coordinates_sorted):
+        iter_dict[count] = item
+        n = count
 
     for i in range(len(pseudo_coordinates)-1):
+        # set lower coordinate in contig as a first coordinate
         if i == 0:
-
             coordinates.append(pseudo_coordinates[iter_dict[i]][0])
 
         x = set(range(query_coordinates[i][0], query_coordinates[i][1]))
         y = set(range(query_coordinates[i+1][0], query_coordinates[i+1][1]))
-
+        # if there is overlap of hsps, this should connect overlap to more
+        # similar hsp
         if x.intersection(y):
             # minus first coordinate !
             xseq = (str(pseudo_coordinates[iter_dict[i]][2])
@@ -309,25 +276,51 @@ def get_hsps_coordinates(sample, hit_num):
             yseq = (str(pseudo_coordinates[iter_dict[i+1]][2])
                     [:len(x.intersection(y))])
 
-            simx = int(similarity(xseq))
-            simy = int(similarity(yseq))
+            # CHECK WHAT GIVES YOU BETTER RESULTS
+            # SIMILARITY X IDENTITY
+#            identx = int(len(xseq) - xseq.count(" ") - xseq.count("+"))
+#            identy = int(len(yseq) - yseq.count(" ") - yseq.count("+"))
 
-            if simx > simy:
+            identx = int(len(xseq) - xseq.count(" "))
+            identy = int(len(yseq) - yseq.count(" "))
+
+            if identx > identy:
                 coordinates.append(pseudo_coordinates[iter_dict[i]][1])
-                coordinates.append(pseudo_coordinates[iter_dict[i+1]][0]+(len(xseq)*3))
+                coordinates.append(
+                        pseudo_coordinates[iter_dict[i+1]][0]+(len(xseq)*3))
             else:
-                coordinates.append(pseudo_coordinates[iter_dict[i]][1]-(len(xseq)*3))
+                coordinates.append(
+                        pseudo_coordinates[iter_dict[i]][1]-(len(xseq)*3))
                 coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
         else:
             coordinates.append(pseudo_coordinates[iter_dict[i]][1])
             coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
-    coordinates.append(pseudo_coordinates[iter_dict[n-1]][1])
+    coordinates.append(pseudo_coordinates[iter_dict[n]][1])
     coordinates.sort()
     return coordinates, global_start, global_end
 
+
+query_dataset = read_proteins('TEST_ABCE_one')
+genome_dict = read_genome('Metopus_genome_R1R21.fasta')
+org_name = "Metopus"
+gene_dict = {}
+blastout = open('Metopus_TEST_one.xml')
+
+
+for blast_record in NCBIXML.parse(blastout):
+    gene_name = blast_record.query.split('_')[-1]
+    test = blast_record.alignments[0].hsps[0]
+    if gene_name not in gene_dict:
+        gene_dict[gene_name] = Gene(gene_name)
+    gene_dict[gene_name].add_blast(blast_record)
+
+samples = gene_dict['ABCE'].best_blast_hits
+for sample in samples:
+    print(get_hsps_coordinates(sample, 0))
+
+
 def give_inter_intron(coordinates,index1, index2, contig_seq):
     """Gives you set of potential introns between two hsps"""
-    
     try:
         start = coordinates[index1] - 10
     except:
