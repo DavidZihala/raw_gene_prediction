@@ -224,14 +224,15 @@ def get_introns_all_hsps(sample, hit_num):
 
 
 def get_hsps_coordinates(sample, hit_num):
-    """Gives you sorted and corrected (according to similarity/identity) 
-    coordinates off all hsps. Crucial function. Huge problem with multiple hits.
-    """
+    """Gives you sorted and corrected (according to similarity/identity)
+    coordinates off all hsps. Crucial function. Huge problem with multiple
+    hits."""
     global_start = 500000
     global_end = 0
     pseudo_coordinates = {}
     coordinates = []
     query_coordinates_unsorted = []
+    starting_set = set()
     for hsp in sample.alignments[hit_num].hsps:
         q_frame, h_frame = hsp.frame
         h_start = hsp.sbjct_start
@@ -248,11 +249,18 @@ def get_hsps_coordinates(sample, hit_num):
             global_start = h_start
         if h_end > global_end:
             global_end = h_end
-        pseudo_coordinates[q_start] = [int(h_start), int(h_end), str(middline)]
-        query_coordinates_unsorted.append([q_start, q_end])
+
+        x = set(range(int(h_start), int(h_end)))
+        if not starting_set.intersection(x):
+            starting_set.update(x)
+            pseudo_coordinates[q_start] = [int(h_start), int(h_end),
+                              str(middline)]
+            query_coordinates_unsorted.append([q_start, q_end])
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
+
+    print(query_coordinates)
 
     n = 0
     iter_dict = {}
@@ -278,11 +286,11 @@ def get_hsps_coordinates(sample, hit_num):
 
             # CHECK WHAT GIVES YOU BETTER RESULTS
             # SIMILARITY X IDENTITY
-#            identx = int(len(xseq) - xseq.count(" ") - xseq.count("+"))
-#            identy = int(len(yseq) - yseq.count(" ") - yseq.count("+"))
+            identx = int(len(xseq) - xseq.count(" ") - xseq.count("+"))
+            identy = int(len(yseq) - yseq.count(" ") - yseq.count("+"))
 
-            identx = int(len(xseq) - xseq.count(" "))
-            identy = int(len(yseq) - yseq.count(" "))
+#            identx = int(len(xseq) - xseq.count(" "))
+#            identy = int(len(yseq) - yseq.count(" "))
 
             if identx > identy:
                 coordinates.append(pseudo_coordinates[iter_dict[i]][1])
@@ -297,26 +305,27 @@ def get_hsps_coordinates(sample, hit_num):
             coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
     coordinates.append(pseudo_coordinates[iter_dict[n]][1])
     coordinates.sort()
+    print(coordinates)
     return coordinates, global_start, global_end
 
 
-query_dataset = read_proteins('TEST_ABCE_one')
-genome_dict = read_genome('Metopus_genome_R1R21.fasta')
-org_name = "Metopus"
-gene_dict = {}
-blastout = open('Metopus_TEST_one.xml')
-
-
-for blast_record in NCBIXML.parse(blastout):
-    gene_name = blast_record.query.split('_')[-1]
-    test = blast_record.alignments[0].hsps[0]
-    if gene_name not in gene_dict:
-        gene_dict[gene_name] = Gene(gene_name)
-    gene_dict[gene_name].add_blast(blast_record)
-
-samples = gene_dict['ABCE'].best_blast_hits
-for sample in samples:
-    print(get_hsps_coordinates(sample, 0))
+#query_dataset = read_proteins('TEST_ABCE_one')
+#genome_dict = read_genome('Metopus_genome_R1R21.fasta')
+#org_name = "Metopus"
+#gene_dict = {}
+#blastout = open('Metopus_TEST_one_test.xml')
+#
+#
+#for blast_record in NCBIXML.parse(blastout):
+#    gene_name = blast_record.query.split('_')[-1]
+#    test = blast_record.alignments[0].hsps[0]
+#    if gene_name not in gene_dict:
+#        gene_dict[gene_name] = Gene(gene_name)
+#    gene_dict[gene_name].add_blast(blast_record)
+#
+#samples = gene_dict['ABCE'].best_blast_hits
+#for sample in samples:
+#    print(get_hsps_coordinates(sample, 0))
 
 
 def give_inter_intron(coordinates,index1, index2, contig_seq):
@@ -417,18 +426,18 @@ def get_protein_predictions(genome_dict, sample, hit_num):
 #org_name = "Metopus"
 #gene_dict = {}
 #blastout = open('Metopus_TEST.xml')
-
-
+#
+#
 #for blast_record in NCBIXML.parse(blastout):
 #    gene_name = blast_record.query.split('_')[-1]
 #    test = blast_record.alignments[0].hsps[0]
 #    if gene_name not in gene_dict:
 #        gene_dict[gene_name] = Gene(gene_name)
 #    gene_dict[gene_name].add_blast(blast_record)
-
-
-
-#with open('Metopus_predictions_TEST.fasta', 'w') as res:
+#
+#
+#
+#with open('Metopus_predictions_TEST_one_test.fasta', 'w') as res:
 #    for gene in gene_dict:
 #        samples = gene_dict[gene].best_blast_hits
 #        contig_dict = {}
