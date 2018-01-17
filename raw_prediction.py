@@ -1,11 +1,31 @@
 import re
-import os
+import sys
 import argparse
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
 import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
+
+
+translation_table = {
+    "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
+    "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S",
+    "TAT": "Y", "TAC": "Y", "TAA": "*", "TAG": "*",
+    "TGT": "C", "TGC": "C", "TGA": "*", "TGG": "W",
+    "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L",
+    "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P",
+    "CAT": "H", "CAC": "H", "CAA": "Q", "CAG": "Q",
+    "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R",
+    "ATT": "I", "ATC": "I", "ATA": "I", "ATG": "M",
+    "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T",
+    "AAT": "N", "AAC": "N", "AAA": "K", "AAG": "K",
+    "AGT": "S", "AGC": "S", "AGA": "R", "AGG": "R",
+    "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",
+    "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",
+    "GAT": "D", "GAC": "D", "GAA": "E", "GAG": "E",
+    "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G"
+    }
 
 
 def read_proteins(dataset):
@@ -33,24 +53,6 @@ def get_translation(sequence):
     """ Simple translation. X for ambiguous codons.
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
-    translation_table = {
-        "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
-        "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S",
-        "TAT": "Y", "TAC": "Y", "TAA": "*", "TAG": "*",
-        "TGT": "C", "TGC": "C", "TGA": "*", "TGG": "W",
-        "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L",
-        "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P",
-        "CAT": "H", "CAC": "H", "CAA": "Q", "CAG": "Q",
-        "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R",
-        "ATT": "I", "ATC": "I", "ATA": "I", "ATG": "M",
-        "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T",
-        "AAT": "N", "AAC": "N", "AAA": "K", "AAG": "K",
-        "AGT": "S", "AGC": "S", "AGA": "R", "AGG": "R",
-        "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",
-        "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",
-        "GAT": "D", "GAC": "D", "GAA": "E", "GAG": "E",
-        "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G"
-        }
     cutting = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
     amino_acids = []
     for codon in cutting:
@@ -313,7 +315,7 @@ def get_hsps_coordinates(sample, hit_num):
 
 def give_inter_intron(starting_point, ending_point, contig_seq):
     """Gives you set of potential introns between two hsps.
-    Input: starting_point - last expected position of first exon, 
+    Input: starting_point - last expected position of first exon,
             ending_point - first expected position of  second exon
     Returns: list of potential intron sequences between two exons"""
     if (starting_point - 10) >= 0:
@@ -420,15 +422,41 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         return get_translation(result_sequence)
 
 
+def progress(count, total, status=''):
+    bar_len = 60
+    filled_len = int(round(bar_len * count / float(total)))
+
+    percents = round(100.0 * count / float(total), 1)
+    bar = '=' * filled_len + '-' * (bar_len - filled_len)
+
+    sys.stdout.write('[%s] %s%s %s\r' % (bar, percents, '%', status))
+    sys.stdout.flush()
+
+
 parser = argparse.ArgumentParser(description='Raw gene prediction tool')
+parser.add_argument("protein_dataset")
+parser.add_argument("genome")
+parser.add_argument("blast_output")
+parser.add_argument("organism_name")
+parser.add_argument("output")
+parser.add_argument("--genetic-code",
+                    help='altrnative genetic code in a form: "TAA:Q;TAG:Q" ')
+args = parser.parse_args()
+if args.genetic_code:
+    if ';' in args.genetic_code:
+        alt_code = args.genetic_code.split(';')
+        for i in alt_code:
+            splitted = i.split(':')
+            translation_table[splitted[0]] = splitted[1]
+    else:
+        splitted = alt_code.split(':')
+        translation_table[splitted[0]] = splitted[1]
 
-
-
-query_dataset = read_proteins('TEST_ABCE_one')
-genome_dict = read_genome('Metopus_genome_R1R21.fasta')
-org_name = "Metopus"
+query_dataset = read_proteins(args.protein_dataset)
+genome_dict = read_genome(args.genome)
+org_name = args.organism_name
 gene_dict = {}
-blastout = open('Metopus_TEST_one_test.xml')
+blastout = open(args.blast_output)
 
 
 for blast_record in NCBIXML.parse(blastout):
@@ -440,22 +468,30 @@ for blast_record in NCBIXML.parse(blastout):
         gene_dict[gene_name].add_blast(blast_record)
 
 
-with open('Metopus_predictions_TEST_one_test.fasta', 'w') as res:
-    for gene in gene_dict:
-        samples = gene_dict[gene].best_blast_hits
-        contig_dict = {}
-        for sample in samples:
-            contig = sample.alignments[0].hit_id
-            seq = get_protein_prediction(genome_dict, sample, 0)
-            evalue = sample.alignments[0].hsps[0].expect
-            if contig not in contig_dict and '*' not in seq:
-                contig_dict[contig] = seq
-                min_eval = evalue
-            elif '*' in seq:
-                pass
-            else:
-                if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+with open(args.output, 'w') as res:
+    total = len(gene_dict)
+    i = 0
+    while i < total:
+        for gene in gene_dict:
+            i += 1
+            progress(i, total, status="Working!")
+#            time.sleep(0.5)
+            samples = gene_dict[gene].best_blast_hits
+            contig_dict = {}
+            for sample in samples:
+                contig = sample.alignments[0].hit_id
+                seq = get_protein_prediction(genome_dict, sample, 0)
+                evalue = sample.alignments[0].hsps[0].expect
+                if contig not in contig_dict and '*' not in seq:
                     contig_dict[contig] = seq
-        for contig, protein in contig_dict.items():
-            res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
-                      sample.query, contig, protein))
+                    min_eval = evalue
+                elif '*' in seq:
+                    pass
+                else:
+                    if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+                        contig_dict[contig] = seq
+            for contig, protein in contig_dict.items():
+                res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
+                          sample.query, contig, protein))
+
+# recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
