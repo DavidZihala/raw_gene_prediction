@@ -225,8 +225,12 @@ def get_introns_all_hsps(sample, hit_num):
 
 def get_hsps_coordinates(sample, hit_num):
     """Gives you sorted and corrected (according to similarity/identity)
-    coordinates off all hsps. Crucial function. Huge problem with multiple
-    hits."""
+    coordinates off all hsps.
+    Input: sample - blast class from Biopython, hit number
+    Returns: tuple - coordinates, global_start, global_end
+    coordinates = coordinates of hsps used for building protein
+    global_start = lowest contig coordinate
+    global_end = highest contig coordinate"""
     global_start = 500000
     global_end = 0
     pseudo_coordinates = {}
@@ -250,6 +254,7 @@ def get_hsps_coordinates(sample, hit_num):
         if h_end > global_end:
             global_end = h_end
 
+        # get rid of hsps which are located in the same place on contig
         x = set(range(int(h_start), int(h_end)))
         if not starting_set.intersection(x):
             starting_set.update(x)
@@ -259,8 +264,6 @@ def get_hsps_coordinates(sample, hit_num):
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
-
-    print(query_coordinates)
 
     n = 0
     iter_dict = {}
@@ -305,41 +308,25 @@ def get_hsps_coordinates(sample, hit_num):
             coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
     coordinates.append(pseudo_coordinates[iter_dict[n]][1])
     coordinates.sort()
-    print(coordinates)
     return coordinates, global_start, global_end
 
 
-#query_dataset = read_proteins('TEST_ABCE_one')
-#genome_dict = read_genome('Metopus_genome_R1R21.fasta')
-#org_name = "Metopus"
-#gene_dict = {}
-#blastout = open('Metopus_TEST_one_test.xml')
-#
-#
-#for blast_record in NCBIXML.parse(blastout):
-#    gene_name = blast_record.query.split('_')[-1]
-#    test = blast_record.alignments[0].hsps[0]
-#    if gene_name not in gene_dict:
-#        gene_dict[gene_name] = Gene(gene_name)
-#    gene_dict[gene_name].add_blast(blast_record)
-#
-#samples = gene_dict['ABCE'].best_blast_hits
-#for sample in samples:
-#    print(get_hsps_coordinates(sample, 0))
-
-
-def give_inter_intron(coordinates,index1, index2, contig_seq):
-    """Gives you set of potential introns between two hsps"""
-    try:
-        start = coordinates[index1] - 10
-    except:
+def give_inter_intron(starting_point, ending_point, contig_seq):
+    """Gives you set of potential introns between two hsps.
+    Input: starting_point - last expected position of first exon, 
+            ending_point - first expected position of  second exon
+    Returns: list of potential intron sequences between two exons"""
+    if (starting_point - 10) >= 0:
+        start = starting_point - 10
+    else:
         start = 0
-    try:
-        end = coordinates[index2] + 10
-    except:
-        end = coordinates[index2]
+    if (ending_point + 10) <= len(contig_seq):
+        end = ending_point + 10
+    else:
+        end = ending_point
     target = str(contig_seq[start:end])
-    GT = [m.start() for m in re.finditer('GT', str(contig_seq[start:start+20]))]
+    GT = [m.start() for m in re.finditer('GT',
+          str(contig_seq[start:start+20]))]
     AG = [m.end() for m in re.finditer('AG', str(contig_seq[end-20:end]))]
     for i in range(len(AG)):
         AG[i] += len(contig_seq[start:end-20])
@@ -351,29 +338,39 @@ def give_inter_intron(coordinates,index1, index2, contig_seq):
                 potential_introns.append(intron)
     return potential_introns
 
+
 def get_all_inter_introns(coordinates, contig_seq):
-    """Return list of all possible inter introns."""
+    """Return list of all possible inter introns.
+    Input: list of coordinates of hsps used for building protein,
+            contig sequence in nucleotides
+    Returns: list of lists - every item in first level list represents one
+            particular position between two exons and it is list of all
+            potential intron sequences in nucleotides"""
     all_inter_introns_list = []
     inter_introns = int((len(coordinates) - 2)/2)
     index1 = 1
     index2 = 2
     for i in range(inter_introns):
-        all_inter_introns_list.append(give_inter_intron(coordinates,index1, 
-                                                        index2,contig_seq))
+        all_inter_introns_list.append(give_inter_intron(coordinates[index1],
+                                                        coordinates[index2],
+                                                        contig_seq))
         index1 += 2
         index2 += 2
     return all_inter_introns_list
 
+
 def check_best_prediction(prot_sequences, query_name):
-    """Chooses best inter intron, and return CDS"""
+    """Chooses best protein prediction
+    Input: protein candidates (list of protein sequenes)
+    Returns: best protein prediction according to blast"""
     best_prediction = ""
     less_dashes = 10000
     matrix = matlist.blosum62
     gap_open = -10
     gap_extend = -0.5
     for sequence in prot_sequences:
-        for a in align.localds(query_dataset[query_name], sequence, 
-            matrix, gap_open, gap_extend):
+        for a in align.localds(query_dataset[query_name], sequence,
+                               matrix, gap_open, gap_extend):
             q = (a[0].count('-'))
             h = (a[1].count('-'))
             dashes = q+h
@@ -383,15 +380,17 @@ def check_best_prediction(prot_sequences, query_name):
     return best_prediction.replace('-', '')
 
 
-def get_protein_predictions(genome_dict, sample, hit_num):
+def get_protein_prediction(genome_dict, sample, hit_num):
+    """Return best protein predictions.
+    Input: genome dict, sample - blast class from Biopython, hit_number
+    Returns: best protein prediction (protein sequence) """
     query_name = sample.query
-    """Return best protein predictions."""
     contig_name = sample.alignments[hit_num].hit_id
     q_frame, h_frame = sample.alignments[hit_num].hsps[0].frame
     contig_seq = get_correct_orientation(contig_name, h_frame)
 
-    coordinates, global_start, global_end = get_hsps_coordinates(sample, hit_num)
-
+    coordinates, global_start, global_end = get_hsps_coordinates(sample,
+                                                                 hit_num)
     result_sequence = str(contig_seq[global_start-1:global_end+1])
     all_introns_no_none = get_introns_all_hsps(sample, hit_num)
     for sequence in all_introns_no_none:
@@ -411,48 +410,52 @@ def get_protein_predictions(genome_dict, sample, hit_num):
                     best_candidates.append(protein)
 #                    for i in combination:
 #                        print(i)
-                
+
         best = check_best_prediction(best_candidates, query_name)
         if best:
             return best
         else:
-             return(get_translation(result_sequence))
+            return get_translation(result_sequence)
     else:
-        return(get_translation(result_sequence))
+        return get_translation(result_sequence)
 
 
-#query_dataset = read_proteins('TEST_ABCE')
-#genome_dict = read_genome('Metopus_genome_R1R21.fasta') 
-#org_name = "Metopus"
-#gene_dict = {}
-#blastout = open('Metopus_TEST.xml')
-#
-#
-#for blast_record in NCBIXML.parse(blastout):
-#    gene_name = blast_record.query.split('_')[-1]
-#    test = blast_record.alignments[0].hsps[0]
-#    if gene_name not in gene_dict:
-#        gene_dict[gene_name] = Gene(gene_name)
-#    gene_dict[gene_name].add_blast(blast_record)
-#
-#
-#
-#with open('Metopus_predictions_TEST_one_test.fasta', 'w') as res:
-#    for gene in gene_dict:
-#        samples = gene_dict[gene].best_blast_hits
-#        contig_dict = {}
-#        for sample in samples:
-#            contig = sample.alignments[0].hit_id
-#            seq = get_protein_predictions(genome_dict, sample, 0)
-#            evalue = sample.alignments[0].hsps[0].expect
-#            if contig not in contig_dict and '*' not in seq:
-#                contig_dict[contig] = seq
-#                min_eval = evalue
-#            elif '*' in seq:
-#                pass
-#            else:
-#                if len(seq) > len(contig_dict[contig]) and '*' not in seq:
-#                    contig_dict[contig] = seq
-#        for contig, protein in contig_dict.items():
-#            res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene, 
-#                      sample.query, contig, protein))
+parser = argparse.ArgumentParser(description='Raw gene prediction tool')
+
+
+
+query_dataset = read_proteins('TEST_ABCE_one')
+genome_dict = read_genome('Metopus_genome_R1R21.fasta')
+org_name = "Metopus"
+gene_dict = {}
+blastout = open('Metopus_TEST_one_test.xml')
+
+
+for blast_record in NCBIXML.parse(blastout):
+    gene_name = blast_record.query.split('_')[-1]
+    if len(blast_record.alignments) > 0:
+        test = blast_record.alignments[0].hsps[0]
+        if gene_name not in gene_dict:
+            gene_dict[gene_name] = Gene(gene_name)
+        gene_dict[gene_name].add_blast(blast_record)
+
+
+with open('Metopus_predictions_TEST_one_test.fasta', 'w') as res:
+    for gene in gene_dict:
+        samples = gene_dict[gene].best_blast_hits
+        contig_dict = {}
+        for sample in samples:
+            contig = sample.alignments[0].hit_id
+            seq = get_protein_prediction(genome_dict, sample, 0)
+            evalue = sample.alignments[0].hsps[0].expect
+            if contig not in contig_dict and '*' not in seq:
+                contig_dict[contig] = seq
+                min_eval = evalue
+            elif '*' in seq:
+                pass
+            else:
+                if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+                    contig_dict[contig] = seq
+        for contig, protein in contig_dict.items():
+            res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
+                      sample.query, contig, protein))
