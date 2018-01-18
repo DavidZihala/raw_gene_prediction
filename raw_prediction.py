@@ -425,6 +425,9 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         return get_translation(result_sequence)
 
 
+threads = 1
+
+
 parser = argparse.ArgumentParser(description='Raw gene prediction tool')
 parser.add_argument("protein_dataset")
 parser.add_argument("genome")
@@ -433,6 +436,7 @@ parser.add_argument("organism_name")
 parser.add_argument("output")
 parser.add_argument("--genetic-code",
                     help='altrnative genetic code in a form: "TAA:Q;TAG:Q" ')
+parser.add_argument("--threads", type=int)
 args = parser.parse_args()
 if args.genetic_code:
     if ';' in args.genetic_code:
@@ -443,6 +447,8 @@ if args.genetic_code:
     else:
         splitted = alt_code.split(':')
         translation_table[splitted[0]] = splitted[1]
+if args.threads:
+    threads = args.threads
 
 query_dataset = read_proteins(args.protein_dataset)
 genome_dict = read_genome(args.genome)
@@ -485,7 +491,7 @@ def finale(gene):
 
 
 with open(args.output, 'w') as res:
-    with Pool(processes=2) as p:
+    with Pool(processes=threads) as p:
         max_ = len(gene_dict)
         r = list(tqdm(p.imap(finale, gene_dict), total=max_))
     for record in r:
