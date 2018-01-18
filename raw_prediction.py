@@ -1,11 +1,14 @@
+#!/usr/bin/python
 import re
 import sys
 import argparse
+from multiprocessing import Pool
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
 import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
+from tqdm import tqdm
 
 
 translation_table = {
@@ -422,17 +425,6 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         return get_translation(result_sequence)
 
 
-def progress(count, total, status=''):
-    bar_len = 60
-    filled_len = int(round(bar_len * count / float(total)))
-
-    percents = round(100.0 * count / float(total), 1)
-    bar = '=' * filled_len + '-' * (bar_len - filled_len)
-
-    sys.stdout.write('[%s] %s%s %s\r' % (bar, percents, '%', status))
-    sys.stdout.flush()
-
-
 parser = argparse.ArgumentParser(description='Raw gene prediction tool')
 parser.add_argument("protein_dataset")
 parser.add_argument("genome")
@@ -468,30 +460,37 @@ for blast_record in NCBIXML.parse(blastout):
         gene_dict[gene_name].add_blast(blast_record)
 
 
+# FIX MIN EVALUE!!!
+
+def finale(gene):
+    samples = gene_dict[gene].best_blast_hits
+    contig_dict = {}
+    result = []
+    for sample in samples:
+        contig = sample.alignments[0].hit_id
+        seq = get_protein_prediction(genome_dict, sample, 0)
+#        evalue = sample.alignments[0].hsps[0].expect
+        if contig not in contig_dict and '*' not in seq:
+            contig_dict[contig] = seq
+#            min_eval = evalue
+        elif '*' in seq:
+            pass
+        else:
+            if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+                contig_dict[contig] = seq
+    for contig, protein in contig_dict.items():
+        result.append('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
+                      sample.query, contig, protein))
+    return result
+
+
 with open(args.output, 'w') as res:
-    total = len(gene_dict)
-    i = 0
-    while i < total:
-        for gene in gene_dict:
-            i += 1
-            progress(i, total, status="Working!")
-#            time.sleep(0.5)
-            samples = gene_dict[gene].best_blast_hits
-            contig_dict = {}
-            for sample in samples:
-                contig = sample.alignments[0].hit_id
-                seq = get_protein_prediction(genome_dict, sample, 0)
-                evalue = sample.alignments[0].hsps[0].expect
-                if contig not in contig_dict and '*' not in seq:
-                    contig_dict[contig] = seq
-                    min_eval = evalue
-                elif '*' in seq:
-                    pass
-                else:
-                    if len(seq) > len(contig_dict[contig]) and '*' not in seq:
-                        contig_dict[contig] = seq
-            for contig, protein in contig_dict.items():
-                res.write('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
-                          sample.query, contig, protein))
+    with Pool(processes=2) as p:
+        max_ = len(gene_dict)
+        r = list(tqdm(p.imap(finale, gene_dict), total=max_))
+    for record in r:
+        if len(record) > 0:
+            for i in record:
+                res.write(i)
 
 # recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
