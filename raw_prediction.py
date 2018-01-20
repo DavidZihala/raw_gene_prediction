@@ -1,6 +1,11 @@
 #!/usr/bin/python
+
+"""
+Script for raw (just blast based) protein predictions.
+recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
+"""
+
 import re
-import sys
 import argparse
 from multiprocessing import Pool
 from Bio.Blast import NCBIXML
@@ -263,8 +268,8 @@ def get_hsps_coordinates(sample, hit_num):
         x = set(range(int(h_start), int(h_end)))
         if not starting_set.intersection(x):
             starting_set.update(x)
-            pseudo_coordinates[q_start] = [int(h_start), int(h_end),
-                              str(middline)]
+            pseudo_coordinates[q_start] = (
+                    [int(h_start), int(h_end), str(middline)])
             query_coordinates_unsorted.append([q_start, q_end])
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
@@ -466,7 +471,7 @@ for blast_record in NCBIXML.parse(blastout):
         gene_dict[gene_name].add_blast(blast_record)
 
 
-# FIX MIN EVALUE!!!
+# if wrong prediction -> return 1. hsps
 
 def finale(gene):
     samples = gene_dict[gene].best_blast_hits
@@ -474,7 +479,7 @@ def finale(gene):
     result = []
     for sample in samples:
         contig = sample.alignments[0].hit_id
-        seq = get_protein_prediction(genome_dict, sample, 0)
+        seq = get_protein_prediction(genome_dict, sample, 0)  # hit number
 #        evalue = sample.alignments[0].hsps[0].expect
         if contig not in contig_dict and '*' not in seq:
             contig_dict[contig] = seq
@@ -498,5 +503,3 @@ with open(args.output, 'w') as res:
         if len(record) > 0:
             for i in record:
                 res.write(i)
-
-# recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
