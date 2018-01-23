@@ -450,7 +450,7 @@ if args.genetic_code:
             splitted = i.split(':')
             translation_table[splitted[0]] = splitted[1]
     else:
-        splitted = alt_code.split(':')
+        splitted = args.genetic_code.split(':')
         translation_table[splitted[0]] = splitted[1]
 if args.threads:
     threads = args.threads
@@ -478,20 +478,22 @@ def finale(gene):
     contig_dict = {}
     result = []
     for sample in samples:
-        contig = sample.alignments[0].hit_id
-        seq = get_protein_prediction(genome_dict, sample, 0)  # hit number
-#        evalue = sample.alignments[0].hsps[0].expect
-        if contig not in contig_dict and '*' not in seq:
-            contig_dict[contig] = seq
-#            min_eval = evalue
-        elif '*' in seq:
-            pass
-        else:
-            if len(seq) > len(contig_dict[contig]) and '*' not in seq:
-                contig_dict[contig] = seq
+        for hit_number in range(5):
+            if len(sample.alignments) > hit_number:
+                contig = sample.alignments[hit_number].hit_id
+                seq = get_protein_prediction(genome_dict, sample, hit_number)
+        #        evalue = sample.alignments[0].hsps[0].expect
+                if contig not in contig_dict and '*' not in seq:
+                    contig_dict[contig] = seq
+        #            min_eval = evalue
+                elif '*' in seq:
+                    pass
+                else:
+                    if len(seq) > len(contig_dict[contig]) and '*' not in seq:
+                        contig_dict[contig] = seq
     for contig, protein in contig_dict.items():
-        result.append('>{}_{}@{}\t{}\n{}\n'.format(org_name, gene,
-                      sample.query, contig, protein))
+        result.append('>{}_{}@{}\n{}\n'.format(org_name, gene,
+                      contig, protein))
     return result
 
 
