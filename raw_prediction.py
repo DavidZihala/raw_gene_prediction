@@ -64,9 +64,9 @@ def get_translation(sequence):
     cutting = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
     amino_acids = []
     for codon in cutting:
-        try:
+        if codon in translation_table:
             amino_acids.append(translation_table[codon])
-        except KeyError:
+        else:
             amino_acids.append('X')
     return ''.join(amino_acids)
 
@@ -478,7 +478,7 @@ def finale(gene):
     contig_dict = {}
     result = []
     for sample in samples:
-        for hit_number in range(5):
+        for hit_number in range(1):  # added that thing to argparse
             if len(sample.alignments) > hit_number:
                 contig = sample.alignments[hit_number].hit_id
                 seq = get_protein_prediction(genome_dict, sample, hit_number)
