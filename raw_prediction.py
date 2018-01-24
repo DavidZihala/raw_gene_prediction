@@ -247,6 +247,7 @@ def get_hsps_coordinates(sample, hit_num):
     coordinates = []
     query_coordinates_unsorted = []
     starting_set = set()
+    hsps_range = set()
     for hsp in sample.alignments[hit_num].hsps:
         q_frame, h_frame = hsp.frame
         h_start = hsp.sbjct_start
@@ -264,16 +265,34 @@ def get_hsps_coordinates(sample, hit_num):
         if h_end > global_end:
             global_end = h_end
 
-        # get rid of hsps which are located in the same place on contig
-        x = set(range(int(h_start), int(h_end)))
-        if not starting_set.intersection(x):
-            starting_set.update(x)
-            pseudo_coordinates[q_start] = (
-                    [int(h_start), int(h_end), str(middline)])
-            query_coordinates_unsorted.append([q_start, q_end])
+        close = False
+
+        if not hsps_range:
+            hsps_range.add(h_start)
+            hsps_range.add(h_end)
+            close = True
+        else:
+            for hsp in hsps_range:
+                if abs(hsp - h_start) < 15000 or abs(hsp - h_end) < 15000:
+                    close = True
+
+        if close:
+            # get rid of hsps which are located in the same place on CONTIG
+            x = set(range(h_start, h_end))
+            if not starting_set.intersection(x):
+                hsps_range.add(h_start)
+                hsps_range.add(h_end)
+                starting_set.update(x)
+                pseudo_coordinates[q_start] = (
+                        [h_start, h_end, str(middline)])
+                query_coordinates_unsorted.append([q_start, q_end])
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
+    print(sample.query_id)
+    for key, value in pseudo_coordinates.items():
+        print(key, value[:2])
+#    print(pseudo_coordinates)
 
     n = 0
     iter_dict = {}
