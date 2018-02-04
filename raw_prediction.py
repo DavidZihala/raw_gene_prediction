@@ -167,7 +167,7 @@ def in_frame_introns(hsp, contig_name, h_len):
     abs(query without dashes + dashes where introns was not found) - len of
     new protein.
     Input: hsp Bio.Blast object, contig name, length of hit (contig)
-    Returns: list of best intron combination e.g. ['GTDSFSAG', '', 'GTSDSAG]"""
+    Returns: list of best intron combination e.g. ['GTAGGAAG', '', 'GTAAAG]"""
     q_frame, h_frame = hsp.frame
     h_sequence = str(hsp.sbjct)
     h_start = hsp.sbjct_start
@@ -229,7 +229,6 @@ def get_introns_all_hsps(sample, hit_num):
     for i in all_introns:
         if i != 'None':
             all_introns_no_none.append(i)
-
     return all_introns_no_none
 
 
@@ -241,7 +240,7 @@ def get_hsps_coordinates(sample, hit_num):
     coordinates = coordinates of hsps used for building protein
     global_start = lowest contig coordinate
     global_end = highest contig coordinate"""
-    global_start = 500000
+    global_start = 5000000000000000
     global_end = 0
     pseudo_coordinates = {}
     coordinates = []
@@ -289,10 +288,6 @@ def get_hsps_coordinates(sample, hit_num):
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
-    print(sample.query_id)
-    for key, value in pseudo_coordinates.items():
-        print(key, value[:2])
-#    print(pseudo_coordinates)
 
     n = 0
     iter_dict = {}
@@ -497,7 +492,7 @@ def finale(gene):
     contig_dict = {}
     result = []
     for sample in samples:
-        for hit_number in range(1):  # added that thing to argparse
+        for hit_number in range(5):  # added that thing to argparse
             if len(sample.alignments) > hit_number:
                 contig = sample.alignments[hit_number].hit_id
                 seq = get_protein_prediction(genome_dict, sample, hit_number)
