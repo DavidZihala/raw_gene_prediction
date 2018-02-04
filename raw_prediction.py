@@ -76,14 +76,14 @@ class Gene():
 
     def __init__(self, name):
         self.name = name
-        self.best_blast_hits = []
+        self.blast_hits = []
 
     def __repr__(self):
         return self.name
 
     def add_blast(self, blast_record):
-        """ Adds blast record to the self.best_blast_hits list """
-        self.best_blast_hits.append(blast_record)
+        """ Adds blast record to the self.blast_hits list """
+        self.blast_hits.append(blast_record)
 
     def get_best_blast(self):
         """ Return best blast hit for given gene from different organisms.
@@ -92,7 +92,7 @@ class Gene():
         gene = self.name
         best_blast = None
         best_blast_e = 0
-        for blast in gene_dict[gene].best_blast_hits:
+        for blast in gene_dict[gene].blast_hits:
             evalue = float(blast.alignments[0].hsps[0].expect)
             if not best_blast:
                 best_blast = blast
@@ -240,7 +240,7 @@ def get_hsps_coordinates(sample, hit_num):
     coordinates = coordinates of hsps used for building protein
     global_start = lowest contig coordinate
     global_end = highest contig coordinate"""
-    global_start = 5000000000000000
+    global_start = 50000000000000000000
     global_end = 0
     pseudo_coordinates = {}
     coordinates = []
@@ -255,14 +255,11 @@ def get_hsps_coordinates(sample, hit_num):
         middline = hsp.match
         q_start = hsp.query_start
         q_end = hsp.query_end
+
         if h_frame < 0:
             fake_start = h_start
             h_start = h_len - h_end + 1
             h_end = h_len - fake_start + 1
-        if h_start < global_start:
-            global_start = h_start
-        if h_end > global_end:
-            global_end = h_end
 
         close = False
 
@@ -276,6 +273,11 @@ def get_hsps_coordinates(sample, hit_num):
                     close = True
 
         if close:
+            if h_start < global_start:
+                global_start = h_start
+            if h_end > global_end:
+                global_end = h_end
+
             # get rid of hsps which are located in the same place on CONTIG
             x = set(range(h_start, h_end))
             if not starting_set.intersection(x):
@@ -390,8 +392,8 @@ def check_best_prediction(prot_sequences, query_name):
     best_prediction = ""
     less_dashes = 10000
     matrix = matlist.blosum62
-    gap_open = -10
-    gap_extend = -0.5
+    gap_open = -11
+    gap_extend = -1
     for sequence in prot_sequences:
         for a in align.localds(query_dataset[query_name], sequence,
                                matrix, gap_open, gap_extend):
@@ -419,7 +421,6 @@ def get_protein_prediction(genome_dict, sample, hit_num):
     all_introns_no_none = get_introns_all_hsps(sample, hit_num)
     for sequence in all_introns_no_none:
         result_sequence = result_sequence.replace(sequence, '')
-#        print(sequence)
 
     if len(sample.alignments[0].hsps) > 1:
         all_list = get_all_inter_introns(coordinates, contig_seq)
@@ -432,9 +433,6 @@ def get_protein_prediction(genome_dict, sample, hit_num):
                 protein = get_translation(test_seq)
                 if '*' not in protein:
                     best_candidates.append(protein)
-#                    for i in combination:
-#                        print(i)
-
         best = check_best_prediction(best_candidates, query_name)
         if best:
             return best
@@ -479,7 +477,6 @@ blastout = open(args.blast_output)
 for blast_record in NCBIXML.parse(blastout):
     gene_name = blast_record.query.split('_')[-1]
     if len(blast_record.alignments) > 0:
-        test = blast_record.alignments[0].hsps[0]
         if gene_name not in gene_dict:
             gene_dict[gene_name] = Gene(gene_name)
         gene_dict[gene_name].add_blast(blast_record)
@@ -488,7 +485,7 @@ for blast_record in NCBIXML.parse(blastout):
 # if wrong prediction -> return 1. hsps
 
 def finale(gene):
-    samples = gene_dict[gene].best_blast_hits
+    samples = gene_dict[gene].blast_hits
     contig_dict = {}
     result = []
     for sample in samples:
