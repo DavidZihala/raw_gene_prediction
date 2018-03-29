@@ -442,7 +442,7 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         return get_translation(result_sequence)
 
 
-threads = 1
+
 
 
 parser = argparse.ArgumentParser(description='Raw gene prediction tool')
@@ -454,6 +454,7 @@ parser.add_argument("output")
 parser.add_argument("--genetic-code",
                     help='altrnative genetic code in a form: "TAA:Q;TAG:Q" ')
 parser.add_argument("--threads", type=int)
+parser.add_argument("--hits", type=int, help='number of hits for one protein')
 args = parser.parse_args()
 if args.genetic_code:
     if ';' in args.genetic_code:
@@ -464,8 +465,15 @@ if args.genetic_code:
     else:
         splitted = args.genetic_code.split(':')
         translation_table[splitted[0]] = splitted[1]
+
+threads = 1
 if args.threads:
     threads = args.threads
+
+hits = 1
+if args.hits:
+    hits = args.hits
+
 
 query_dataset = read_proteins(args.protein_dataset)
 genome_dict = read_genome(args.genome)
@@ -489,14 +497,12 @@ def finale(gene):
     contig_dict = {}
     result = []
     for sample in samples:
-        for hit_number in range(5):  # added that thing to argparse
+        for hit_number in range(hits):
             if len(sample.alignments) > hit_number:
                 contig = sample.alignments[hit_number].hit_id
                 seq = get_protein_prediction(genome_dict, sample, hit_number)
-        #        evalue = sample.alignments[0].hsps[0].expect
                 if contig not in contig_dict and '*' not in seq:
                     contig_dict[contig] = seq
-        #            min_eval = evalue
                 elif '*' in seq:
                     pass
                 else:
