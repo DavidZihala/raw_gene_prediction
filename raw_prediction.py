@@ -14,9 +14,11 @@ import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
 from tqdm import tqdm
+import time
 
+start = time.time()
 
-translation_table = {
+trans_table = {
     "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
     "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S",
     "TAT": "Y", "TAC": "Y", "TAA": "*", "TAG": "*",
@@ -64,8 +66,8 @@ def get_translation(sequence):
     cutting = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
     amino_acids = []
     for codon in cutting:
-        if codon in translation_table:
-            amino_acids.append(translation_table[codon])
+        if codon in trans_table:
+            amino_acids.append(trans_table[codon])
         else:
             amino_acids.append('X')
     return ''.join(amino_acids)
@@ -109,9 +111,9 @@ def get_correct_orientation(contig_name, hit_frame):
     Input: contig name, frame of contig sequence according to hit
     Returns: contig sequence in proper orientation (str) """
     if hit_frame < 0:
-        contig_seq = genome_dict[contig_name].reverse_complement().upper()
+        contig_seq = genome_dict[contig_name.split('|')[1]].reverse_complement().upper()
     else:
-        contig_seq = genome_dict[contig_name].upper()
+        contig_seq = genome_dict[contig_name.split('|')[1]].upper()
     return contig_seq
 
 
@@ -342,20 +344,20 @@ def give_inter_intron(starting_point, ending_point, contig_seq):
     Input: starting_point - last expected position of first exon,
             ending_point - first expected position of  second exon
     Returns: list of potential intron sequences between two exons"""
-    if (starting_point - 10) >= 0:
-        start = starting_point - 10
+    if (starting_point - 15) >= 0:
+        start = starting_point - 15
     else:
         start = 0
-    if (ending_point + 10) <= len(contig_seq):
-        end = ending_point + 10
+    if (ending_point + 15) <= len(contig_seq):
+        end = ending_point + 15
     else:
         end = ending_point
     target = str(contig_seq[start:end])
     GT = [m.start() for m in re.finditer('GT',
-          str(contig_seq[start:start+20]))]
-    AG = [m.end() for m in re.finditer('AG', str(contig_seq[end-20:end]))]
+          str(contig_seq[start:start+30]))]
+    AG = [m.end() for m in re.finditer('AG', str(contig_seq[end-30:end]))]
     for i in range(len(AG)):
-        AG[i] += len(contig_seq[start:end-20])
+        AG[i] += len(contig_seq[start:end-30])
     potential_introns = []
     for r in itertools.product(GT, AG):
         if r[0] < r[1]:
@@ -395,14 +397,14 @@ def check_best_prediction(prot_sequences, query_name):
     gap_open = -11
     gap_extend = -1
     for sequence in prot_sequences:
-        for a in align.localds(query_dataset[query_name], sequence,
-                               matrix, gap_open, gap_extend):
-            q = (a[0].count('-'))
-            h = (a[1].count('-'))
-            dashes = q+h
-            if dashes < less_dashes:
-                less_dashes = dashes
-                best_prediction = a[1]
+        ga =  align.globalds(query_dataset[query_name], sequence,
+                               matrix, gap_open, gap_extend)[0]
+        q = (ga[0].count('-'))
+        h = (ga[1].count('-'))
+        dashes = q+h
+        if dashes < less_dashes:
+            less_dashes = dashes
+            best_prediction = ga[1]
     return best_prediction.replace('-', '')
 
 
@@ -461,10 +463,10 @@ if args.genetic_code:
         alt_code = args.genetic_code.split(';')
         for i in alt_code:
             splitted = i.split(':')
-            translation_table[splitted[0]] = splitted[1]
+            trans_table[splitted[0]] = splitted[1]
     else:
         splitted = args.genetic_code.split(':')
-        translation_table[splitted[0]] = splitted[1]
+        trans_table[splitted[0]] = splitted[1]
 
 threads = 1
 if args.threads:
@@ -497,6 +499,7 @@ def finale(gene):
     contig_dict = {}
     result = []
     for sample in samples:
+
         for hit_number in range(hits):
             if len(sample.alignments) > hit_number:
                 contig = sample.alignments[hit_number].hit_id
@@ -515,6 +518,8 @@ def finale(gene):
 
 
 with open(args.output, 'w') as res:
+    # for k, v in gene_dict.items():
+    #     finale(k)
     with Pool(processes=threads) as p:
         max_ = len(gene_dict)
         r = list(tqdm(p.imap(finale, gene_dict), total=max_))
@@ -522,3 +527,5 @@ with open(args.output, 'w') as res:
         if len(record) > 0:
             for i in record:
                 res.write(i)
+end = time.time()
+print(end - start)
