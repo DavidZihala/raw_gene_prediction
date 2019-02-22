@@ -111,9 +111,9 @@ def get_correct_orientation(contig_name, hit_frame):
     Input: contig name, frame of contig sequence according to hit
     Returns: contig sequence in proper orientation (str) """
     if hit_frame < 0:
-        contig_seq = genome_dict[contig_name.split('|')[1]].reverse_complement().upper()
+        contig_seq = genome_dict[contig_name].reverse_complement().upper()
     else:
-        contig_seq = genome_dict[contig_name.split('|')[1]].upper()
+        contig_seq = genome_dict[contig_name].upper()
     return contig_seq
 
 
@@ -221,6 +221,8 @@ def get_introns_all_hsps(sample, hit_num):
     Input: blast class from Biopython
     Returns: list of best in-frame intron candidates """
     contig_name = sample.alignments[hit_num].hit_id
+    if '|' in contig_name:
+        contig_name = contig_name.split('|')[1]
     h_len = sample.alignments[hit_num].length
     all_introns = []
     for hsp in sample.alignments[hit_num].hsps:
@@ -414,6 +416,8 @@ def get_protein_prediction(genome_dict, sample, hit_num):
     Returns: best protein prediction (protein sequence) """
     query_name = sample.query
     contig_name = sample.alignments[hit_num].hit_id
+    if '|' in contig_name:
+        contig_name = contig_name.split('|')[1]
     q_frame, h_frame = sample.alignments[hit_num].hsps[0].frame
     contig_seq = get_correct_orientation(contig_name, h_frame)
 
@@ -428,10 +432,15 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         all_list = get_all_inter_introns(coordinates, contig_seq)
         all_list_no_none = [l for l in all_list if len(l) > 0]
         best_candidates = []
+        all_combination = 1
         for combination in list(itertools.product(*all_list_no_none)):
-            test_seq = result_sequence[:]
-            for i in combination:
-                test_seq = test_seq.replace(i, '')
+            all_combination += 1
+            if all_combination > 1500:
+                break
+            else:
+                test_seq = result_sequence[:]
+                for i in combination:
+                    test_seq = test_seq.replace(i, '')
                 protein = get_translation(test_seq)
                 if '*' not in protein:
                     best_candidates.append(protein)
