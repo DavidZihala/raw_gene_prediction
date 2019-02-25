@@ -14,7 +14,19 @@ import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
 from tqdm import tqdm
-from david.utils import timer
+from time import time
+
+
+def timer(original_function):
+    def wrapper_func(*args, **kwargs):
+        start = time()
+        func = original_function(*args, **kwargs)
+        end = time()
+        elapsed = end - start
+        print(elapsed)
+        return func
+    return wrapper_func
+
 
 trans_table = {
     "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
@@ -314,9 +326,9 @@ def hsps_coordinates(sample, hit_num):
         if x.intersection(y):
             # minus first coordinate !
             xseq = (str(pseudo_coordinates[iter_dict[i]][2])
-                    [-len(x.intersection(y)):])
+            [-len(x.intersection(y)):])
             yseq = (str(pseudo_coordinates[iter_dict[i + 1]][2])
-                    [:len(x.intersection(y))])
+            [:len(x.intersection(y))])
 
             # CHECK WHAT GIVES YOU BETTER RESULTS
             # SIMILARITY X IDENTITY
