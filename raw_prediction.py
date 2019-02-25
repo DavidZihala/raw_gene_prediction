@@ -63,6 +63,7 @@ def get_translation(sequence):
     """ Simple translation. X for ambiguous codons.
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
+    # TODO: add 'codons created' option
     cutting = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
     amino_acids = []
     for codon in cutting:
