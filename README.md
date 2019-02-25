@@ -1,4 +1,4 @@
-# raw_gene_prediction :poop: 
+# raw_gene_prediction :poop: :see_no_evil:
 
 ## test data
 - **Genome:** dicty.fna
