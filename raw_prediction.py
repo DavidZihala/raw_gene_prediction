@@ -3,6 +3,7 @@
 """
 Script for raw (just blast based) protein predictions.
 recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
+-dust no -soft_masking
 """
 
 import re
@@ -229,7 +230,7 @@ def in_frame_introns(hsp, contig_name, h_len):
     return intron_sequences
 
 
-def introns_all_hsps(sample, hit_num):
+def ntrons_all_hsps(sample, hit_num):
     """gives you all in-frame introns for all hsps.
     Input: blast class from Biopython
     Returns: list of best in-frame intron candidates """
@@ -297,7 +298,7 @@ def hsps_coordinates(sample, hit_num):
 
             # get rid of hsps which are located in the same place on CONTIG
             x = set(range(h_start, h_end))
-            if len(starting_set.intersection(x)) < 15: #maximum overlap
+            if len(starting_set.intersection(x)) < 15:
                 hsps_range.add(h_start)
                 hsps_range.add(h_end)
                 starting_set.update(x)
@@ -437,13 +438,17 @@ def protein_prediction(sample, hit_num):
     coordinates, global_start, global_end = hsps_coordinates(sample,
                                                              hit_num)
     result_sequence = str(contig_seq[global_start - 1:global_end + 1])
-    all_introns_no_none = introns_all_hsps(sample, hit_num)
+    all_introns_no_none = ntrons_all_hsps(sample, hit_num)
+
     for sequence in all_introns_no_none:
         result_sequence = result_sequence.replace(sequence, '')
 
     if len(sample.alignments[0].hsps) > 1:
         all_list = get_all_inter_introns(coordinates, contig_seq)
         all_list_no_none = [l for l in all_list if len(l) > 0]
+        for list_ in all_list_no_none:
+            list_.append('')
+        # append('') means that we are adding no intron at the place possibility
         best_candidates = []
         all_combination = 1
         for combination in list(itertools.product(*all_list_no_none)):
