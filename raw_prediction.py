@@ -14,9 +14,7 @@ import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
 from tqdm import tqdm
-import time
-
-start = time.time()
+from david.utils import timer
 
 trans_table = {
     "TTT": "F", "TTC": "F", "TTA": "L", "TTG": "L",
@@ -59,14 +57,14 @@ def read_genome(genome):
     return genome_dict
 
 
-def get_translation(sequence):
+def translation(sequence, codons=None):
     """ Simple translation. X for ambiguous codons.
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
-    # TODO: add 'codons created' option
-    cutting = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
+    if not codons:
+        codons = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
     amino_acids = []
-    for codon in cutting:
+    for codon in codons:
         if codon in trans_table:
             amino_acids.append(trans_table[codon])
         else:
@@ -200,12 +198,14 @@ def in_frame_introns(hsp, contig_name, h_len):
 
         lower_distance = 500  # arbitrary used random high number
         # test combinations of potential introns
+        stops = {'TAG', 'TGA', 'TAA'}
         for combination in list(itertools.product(*potential_introns)):
                 test_seq = str(contig_seq[h_start-1:h_end])
                 for i in combination:
                     test_seq = test_seq.replace(i, '')
-                protein = get_translation(test_seq)
-                if '*' not in protein:
+                codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
+                if len(stops.difference(set(codons_))) == 3:
+                    protein = translation(test_seq, codons=codons_)
                     query_length = len(str(hsp.query).replace('-', ''))
                     for count, value in enumerate(combination):
                         if not value:
@@ -442,67 +442,17 @@ def get_protein_prediction(genome_dict, sample, hit_num):
                 test_seq = result_sequence[:]
                 for i in combination:
                     test_seq = test_seq.replace(i, '')
-                protein = get_translation(test_seq)
+                protein = translation(test_seq)
                 if '*' not in protein:
                     best_candidates.append(protein)
         best = check_best_prediction(best_candidates, query_name)
         if best:
             return best
         else:
-            return get_translation(result_sequence)
+            return translation(result_sequence)
     else:
-        return get_translation(result_sequence)
+        return translation(result_sequence)
 
-
-
-
-
-parser = argparse.ArgumentParser(description='Raw gene prediction tool')
-parser.add_argument("protein_dataset")
-parser.add_argument("genome")
-parser.add_argument("blast_output")
-parser.add_argument("organism_name")
-parser.add_argument("output")
-parser.add_argument("--genetic-code",
-                    help='altrnative genetic code in a form: "TAA:Q;TAG:Q" ')
-parser.add_argument("--threads", type=int)
-parser.add_argument("--hits", type=int, help='number of hits for one protein')
-args = parser.parse_args()
-if args.genetic_code:
-    if ';' in args.genetic_code:
-        alt_code = args.genetic_code.split(';')
-        for i in alt_code:
-            splitted = i.split(':')
-            trans_table[splitted[0]] = splitted[1]
-    else:
-        splitted = args.genetic_code.split(':')
-        trans_table[splitted[0]] = splitted[1]
-
-threads = 1
-if args.threads:
-    threads = args.threads
-
-hits = 1
-if args.hits:
-    hits = args.hits
-
-
-query_dataset = read_proteins(args.protein_dataset)
-genome_dict = read_genome(args.genome)
-org_name = args.organism_name
-gene_dict = {}
-blastout = open(args.blast_output)
-
-
-for blast_record in NCBIXML.parse(blastout):
-    gene_name = blast_record.query.split('_')[-1]
-    if len(blast_record.alignments) > 0:
-        if gene_name not in gene_dict:
-            gene_dict[gene_name] = Gene(gene_name)
-        gene_dict[gene_name].add_blast(blast_record)
-
-
-# if wrong prediction -> return 1. hsps
 
 def finale(gene):
     samples = gene_dict[gene].blast_hits
@@ -527,15 +477,61 @@ def finale(gene):
     return result
 
 
-with open(args.output, 'w') as res:
-    # for k, v in gene_dict.items():
-    #     finale(k)
-    with Pool(processes=threads) as p:
-        max_ = len(gene_dict)
-        r = list(tqdm(p.imap(finale, gene_dict), total=max_))
-    for record in r:
-        if len(record) > 0:
-            for i in record:
-                res.write(i)
-end = time.time()
-print(end - start)
+@timer
+def main():
+    for blast_record in NCBIXML.parse(blastout):
+        gene_name = blast_record.query.split('_')[-1]
+        if len(blast_record.alignments) > 0:
+            if gene_name not in gene_dict:
+                gene_dict[gene_name] = Gene(gene_name)
+            gene_dict[gene_name].add_blast(blast_record)
+
+
+    with open(args.output, 'w') as res:
+        # for k, v in gene_dict.items():
+        #     finale(k)
+        with Pool(processes=threads) as p:
+            max_ = len(gene_dict)
+            r = list(tqdm(p.imap(finale, gene_dict), total=max_))
+        for record in r:
+            if len(record) > 0:
+                for i in record:
+                    res.write(i)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Raw gene prediction tool')
+    parser.add_argument("protein_dataset")
+    parser.add_argument("genome")
+    parser.add_argument("blast_output")
+    parser.add_argument("organism_name")
+    parser.add_argument("output")
+    parser.add_argument("--genetic-code",
+                        help='altrnative genetic code in a form: "TAA:Q;TAG:Q" ')
+    parser.add_argument("--threads", type=int)
+    parser.add_argument("--hits", type=int, help='number of hits for one protein')
+    args = parser.parse_args()
+    if args.genetic_code:
+        if ';' in args.genetic_code:
+            alt_code = args.genetic_code.split(';')
+            for i in alt_code:
+                splitted = i.split(':')
+                trans_table[splitted[0]] = splitted[1]
+        else:
+            splitted = args.genetic_code.split(':')
+            trans_table[splitted[0]] = splitted[1]
+
+    threads = 1
+    if args.threads:
+        threads = args.threads
+
+    hits = 1
+    if args.hits:
+        hits = args.hits
+
+    query_dataset = read_proteins(args.protein_dataset)
+    genome_dict = read_genome(args.genome)
+    org_name = args.organism_name
+    gene_dict = {}
+    blastout = open(args.blast_output)
+    main()
