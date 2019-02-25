@@ -169,7 +169,7 @@ def in_frame_introns(hsp, contig_name, h_len):
     new protein.
     Input: hsp Bio.Blast object, contig name, length of hit (contig)
     Returns: list of best intron combination e.g. ['GTAGGAAG', '', 'GTAAAG]"""
-    q_frame, h_frame = hsp.frame
+    _, h_frame = hsp.frame
     h_sequence = str(hsp.sbjct)
     h_start = hsp.sbjct_start
     h_end = hsp.sbjct_end
@@ -253,7 +253,7 @@ def get_hsps_coordinates(sample, hit_num):
     starting_set = set()
     hsps_range = set()
     for hsp in sample.alignments[hit_num].hsps:
-        q_frame, h_frame = hsp.frame
+        _, h_frame = hsp.frame
         h_start = hsp.sbjct_start
         h_end = hsp.sbjct_end
         h_len = sample.alignments[hit_num].length
@@ -381,7 +381,7 @@ def get_all_inter_introns(coordinates, contig_seq):
     inter_introns = int((len(coordinates) - 2)/2)
     index1 = 1
     index2 = 2
-    for i in range(inter_introns):
+    for _ in range(inter_introns):
         all_inter_introns_list.append(give_inter_intron(coordinates[index1],
                                                         coordinates[index2],
                                                         contig_seq))
@@ -419,7 +419,7 @@ def get_protein_prediction(genome_dict, sample, hit_num):
     contig_name = sample.alignments[hit_num].hit_id
     if '|' in contig_name:
         contig_name = contig_name.split('|')[1]
-    q_frame, h_frame = sample.alignments[hit_num].hsps[0].frame
+    _, h_frame = sample.alignments[hit_num].hsps[0].frame
     contig_seq = get_correct_orientation(contig_name, h_frame)
 
     coordinates, global_start, global_end = get_hsps_coordinates(sample,
