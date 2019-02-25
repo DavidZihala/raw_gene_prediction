@@ -33,7 +33,7 @@ trans_table = {
     "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",
     "GAT": "D", "GAC": "D", "GAA": "E", "GAG": "E",
     "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G"
-    }
+}
 
 
 def read_proteins(dataset):
@@ -51,10 +51,10 @@ def read_genome(genome):
     """ Reads genome as a dictionary.
     Input: nucleotide sequences in fasta format
     Returns: {contig_name:seq} """
-    genome_dict = {}
+    genomic_dict = {}
     for contig in SeqIO.parse(genome, 'fasta'):
-        genome_dict[contig.name] = contig.seq
-    return genome_dict
+        genomic_dict[contig.name] = contig.seq
+    return genomic_dict
 
 
 def translation(sequence, codons=None):
@@ -62,7 +62,7 @@ def translation(sequence, codons=None):
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
     if not codons:
-        codons = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
+        codons = [sequence[i:i + 3] for i in range(0, len(sequence) - 2, 3)]
     amino_acids = []
     for codon in codons:
         if codon in trans_table:
@@ -72,7 +72,7 @@ def translation(sequence, codons=None):
     return ''.join(amino_acids)
 
 
-class Gene():
+class Gene:
     """ Gene class. Mainly for best blast hit extraction. """
 
     def __init__(self, name):
@@ -105,7 +105,7 @@ class Gene():
         return best_blast
 
 
-def get_correct_orientation(contig_name, hit_frame):
+def correct_orientation(contig_name, hit_frame):
     """ Gives you contig in proper orientation.
     Input: contig name, frame of contig sequence according to hit
     Returns: contig sequence in proper orientation (str) """
@@ -124,9 +124,9 @@ def get_insertions(q_sequence, h_sequence, h_start):
     for m in re.finditer(r"-{3,100}", q_sequence):
         # looking for 'deletions' in query sequence in alignment
         start, end = [m.start(), m.end()]
-        real_start = (start - h_sequence[:start].count('-'))*3
-        insertions.append((real_start+h_start,
-                           real_start+h_start+(end-start)*3))
+        real_start = (start - h_sequence[:start].count('-')) * 3
+        insertions.append((real_start + h_start,
+                           real_start + h_start + (end - start) * 3))
     return insertions
 
 
@@ -148,14 +148,14 @@ def potential_inframe_intron(intron_position, contig_seq):
     else:
         end = base_end
     target = str(contig_seq[start:end])
-    GT = [m.start() for m in re.finditer('GT', target[:int((len(target))/2)])]
-    AG = [m.end() for m in re.finditer('AG', target)]
+    gt = [m.start() for m in re.finditer('GT', target[:int((len(target)) / 2)])]
+    ag = [m.end() for m in re.finditer('AG', target)]
     potential_introns = []
-    for r in itertools.product(GT, AG):
+    for r in itertools.product(gt, ag):
         # combinations of all possible GT....AG sequences
         if r[0] < r[1]:
             intron = target[r[0]:r[1]]
-            if (len(intron) > 4 and len(intron) % 3 == 0):
+            if len(intron) > 4 and len(intron) % 3 == 0:
                 potential_introns.append(str(intron))
     potential_introns.append('')
     return potential_introns
@@ -183,13 +183,13 @@ def in_frame_introns(hsp, contig_name, h_len):
 
     distance_dict = {}  # important for distance counting
     for count, position in enumerate(intron_positions):
-        distance_dict[count] = int((position[1] - position[0])/3)
+        distance_dict[count] = int((position[1] - position[0]) / 3)
 
     potential_introns = []
     intron_sequences = []
     if intron_positions:
         # gives you hit sequence in correct orientation
-        contig_seq = get_correct_orientation(contig_name, h_frame)
+        contig_seq = correct_orientation(contig_name, h_frame)
         intron_sequences = []
         # gives you intron sequence in nucleotides
         for intron_position in intron_positions:
@@ -200,24 +200,24 @@ def in_frame_introns(hsp, contig_name, h_len):
         # test combinations of potential introns
         stops = {'TAG', 'TGA', 'TAA'}
         for combination in list(itertools.product(*potential_introns)):
-                test_seq = str(contig_seq[h_start-1:h_end])
-                for i in combination:
-                    test_seq = test_seq.replace(i, '')
-                codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
-                if len(stops.difference(set(codons_))) == 3:
-                    protein = translation(test_seq, codons=codons_)
-                    query_length = len(str(hsp.query).replace('-', ''))
-                    for count, value in enumerate(combination):
-                        if not value:
-                            query_length += distance_dict[count]
-                    distance = abs(query_length - len(protein))
-                    if distance < lower_distance:
-                        lower_distance = distance
-                        intron_sequences = list(combination)
+            test_seq = str(contig_seq[h_start - 1:h_end])
+            for i in combination:
+                test_seq = test_seq.replace(i, '')
+            codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
+            if len(stops.difference(set(codons_))) == 3:
+                protein = translation(test_seq, codons=codons_)
+                query_length = len(str(hsp.query).replace('-', ''))
+                for count, value in enumerate(combination):
+                    if not value:
+                        query_length += distance_dict[count]
+                distance = abs(query_length - len(protein))
+                if distance < lower_distance:
+                    lower_distance = distance
+                    intron_sequences = list(combination)
     return intron_sequences
 
 
-def get_introns_all_hsps(sample, hit_num):
+def ntrons_all_hsps(sample, hit_num):
     """gives you all in-frame introns for all hsps.
     Input: blast class from Biopython
     Returns: list of best in-frame intron candidates """
@@ -237,7 +237,7 @@ def get_introns_all_hsps(sample, hit_num):
     return all_introns_no_none
 
 
-def get_hsps_coordinates(sample, hit_num):
+def hsps_coordinates(sample, hit_num):
     """Gives you sorted and corrected (according to similarity/identity)
     coordinates off all hsps.
     Input: sample - blast class from Biopython, hit number
@@ -285,12 +285,12 @@ def get_hsps_coordinates(sample, hit_num):
 
             # get rid of hsps which are located in the same place on CONTIG
             x = set(range(h_start, h_end))
-            if not starting_set.intersection(x):
+            if len(starting_set.intersection(x)) < 15:
                 hsps_range.add(h_start)
                 hsps_range.add(h_end)
                 starting_set.update(x)
                 pseudo_coordinates[q_start] = (
-                        [h_start, h_end, str(middline)])
+                    [h_start, h_end, str(middline)])
                 query_coordinates_unsorted.append([q_start, q_end])
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
@@ -302,20 +302,20 @@ def get_hsps_coordinates(sample, hit_num):
         iter_dict[count] = item
         n = count
 
-    for i in range(len(pseudo_coordinates)-1):
+    for i in range(len(pseudo_coordinates) - 1):
         # set lower coordinate in contig as a first coordinate
         if i == 0:
             coordinates.append(pseudo_coordinates[iter_dict[i]][0])
 
         x = set(range(query_coordinates[i][0], query_coordinates[i][1]))
-        y = set(range(query_coordinates[i+1][0], query_coordinates[i+1][1]))
+        y = set(range(query_coordinates[i + 1][0], query_coordinates[i + 1][1]))
         # if there is overlap of hsps, this should connect overlap to more
         # similar hsp
         if x.intersection(y):
             # minus first coordinate !
             xseq = (str(pseudo_coordinates[iter_dict[i]][2])
                     [-len(x.intersection(y)):])
-            yseq = (str(pseudo_coordinates[iter_dict[i+1]][2])
+            yseq = (str(pseudo_coordinates[iter_dict[i + 1]][2])
                     [:len(x.intersection(y))])
 
             # CHECK WHAT GIVES YOU BETTER RESULTS
@@ -323,20 +323,20 @@ def get_hsps_coordinates(sample, hit_num):
             identx = int(len(xseq) - xseq.count(" ") - xseq.count("+"))
             identy = int(len(yseq) - yseq.count(" ") - yseq.count("+"))
 
-#            identx = int(len(xseq) - xseq.count(" "))
-#            identy = int(len(yseq) - yseq.count(" "))
+            #            identx = int(len(xseq) - xseq.count(" "))
+            #            identy = int(len(yseq) - yseq.count(" "))
 
             if identx > identy:
                 coordinates.append(pseudo_coordinates[iter_dict[i]][1])
                 coordinates.append(
-                        pseudo_coordinates[iter_dict[i+1]][0]+(len(xseq)*3))
+                    pseudo_coordinates[iter_dict[i + 1]][0] + (len(xseq) * 3))
             else:
                 coordinates.append(
-                        pseudo_coordinates[iter_dict[i]][1]-(len(xseq)*3))
-                coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
+                    pseudo_coordinates[iter_dict[i]][1] - (len(xseq) * 3))
+                coordinates.append(pseudo_coordinates[iter_dict[i + 1]][0])
         else:
             coordinates.append(pseudo_coordinates[iter_dict[i]][1])
-            coordinates.append(pseudo_coordinates[iter_dict[i+1]][0])
+            coordinates.append(pseudo_coordinates[iter_dict[i + 1]][0])
     coordinates.append(pseudo_coordinates[iter_dict[n]][1])
     coordinates.sort()
     return coordinates, global_start, global_end
@@ -356,13 +356,13 @@ def give_inter_intron(starting_point, ending_point, contig_seq):
     else:
         end = ending_point
     target = str(contig_seq[start:end])
-    GT = [m.start() for m in re.finditer('GT',
-          str(contig_seq[start:start+30]))]
-    AG = [m.end() for m in re.finditer('AG', str(contig_seq[end-30:end]))]
-    for i in range(len(AG)):
-        AG[i] += len(contig_seq[start:end-30])
+    gt = [m.start() for m in re.finditer('GT',
+                                         str(contig_seq[start:start + 30]))]
+    ag = [m.end() for m in re.finditer('AG', str(contig_seq[end - 30:end]))]
+    for i in range(len(ag)):
+        ag[i] += len(contig_seq[start:end - 30])
     potential_introns = []
-    for r in itertools.product(GT, AG):
+    for r in itertools.product(gt, ag):
         if r[0] < r[1]:
             intron = target[r[0]:r[1]]
             if len(intron) > 4:
@@ -378,7 +378,7 @@ def get_all_inter_introns(coordinates, contig_seq):
             particular position between two exons and it is list of all
             potential intron sequences in nucleotides"""
     all_inter_introns_list = []
-    inter_introns = int((len(coordinates) - 2)/2)
+    inter_introns = int((len(coordinates) - 2) / 2)
     index1 = 1
     index2 = 2
     for _ in range(inter_introns):
@@ -400,18 +400,18 @@ def check_best_prediction(prot_sequences, query_name):
     gap_open = -11
     gap_extend = -1
     for sequence in prot_sequences:
-        ga =  align.globalds(query_dataset[query_name], sequence,
-                               matrix, gap_open, gap_extend)[0]
+        ga = align.globalds(query_dataset[query_name], sequence,
+                            matrix, gap_open, gap_extend)[0]
         q = (ga[0].count('-'))
         h = (ga[1].count('-'))
-        dashes = q+h
+        dashes = q + h
         if dashes < less_dashes:
             less_dashes = dashes
             best_prediction = ga[1]
     return best_prediction.replace('-', '')
 
 
-def get_protein_prediction(genome_dict, sample, hit_num):
+def protein_prediction(sample, hit_num):
     """Return best protein predictions.
     Input: genome dict, sample - blast class from Biopython, hit_number
     Returns: best protein prediction (protein sequence) """
@@ -420,12 +420,12 @@ def get_protein_prediction(genome_dict, sample, hit_num):
     if '|' in contig_name:
         contig_name = contig_name.split('|')[1]
     _, h_frame = sample.alignments[hit_num].hsps[0].frame
-    contig_seq = get_correct_orientation(contig_name, h_frame)
+    contig_seq = correct_orientation(contig_name, h_frame)
 
-    coordinates, global_start, global_end = get_hsps_coordinates(sample,
-                                                                 hit_num)
-    result_sequence = str(contig_seq[global_start-1:global_end+1])
-    all_introns_no_none = get_introns_all_hsps(sample, hit_num)
+    coordinates, global_start, global_end = hsps_coordinates(sample,
+                                                             hit_num)
+    result_sequence = str(contig_seq[global_start - 1:global_end + 1])
+    all_introns_no_none = ntrons_all_hsps(sample, hit_num)
     for sequence in all_introns_no_none:
         result_sequence = result_sequence.replace(sequence, '')
 
@@ -454,7 +454,7 @@ def get_protein_prediction(genome_dict, sample, hit_num):
         return translation(result_sequence)
 
 
-def finale(gene):
+def final(gene):
     samples = gene_dict[gene].blast_hits
     contig_dict = {}
     result = []
@@ -463,7 +463,7 @@ def finale(gene):
         for hit_number in range(hits):
             if len(sample.alignments) > hit_number:
                 contig = sample.alignments[hit_number].hit_id
-                seq = get_protein_prediction(genome_dict, sample, hit_number)
+                seq = protein_prediction(sample, hit_number)
                 if contig not in contig_dict and '*' not in seq:
                     contig_dict[contig] = seq
                 elif '*' in seq:
@@ -473,7 +473,7 @@ def finale(gene):
                         contig_dict[contig] = seq
     for contig, protein in contig_dict.items():
         result.append('>{}_{}@{}\n{}\n'.format(org_name, gene,
-                      contig, protein))
+                                               contig, protein))
     return result
 
 
@@ -486,13 +486,12 @@ def main():
                 gene_dict[gene_name] = Gene(gene_name)
             gene_dict[gene_name].add_blast(blast_record)
 
-
     with open(args.output, 'w') as res:
         # for k, v in gene_dict.items():
         #     finale(k)
         with Pool(processes=threads) as p:
             max_ = len(gene_dict)
-            r = list(tqdm(p.imap(finale, gene_dict), total=max_))
+            r = list(tqdm(p.imap(final, gene_dict), total=max_))
         for record in r:
             if len(record) > 0:
                 for i in record:
