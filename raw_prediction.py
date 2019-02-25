@@ -169,7 +169,7 @@ def in_frame_introns(hsp, contig_name, h_len):
     new protein.
     Input: hsp Bio.Blast object, contig name, length of hit (contig)
     Returns: list of best intron combination e.g. ['GTAGGAAG', '', 'GTAAAG]"""
-    _, h_frame = hsp.frame
+    h_frame = hsp.frame[1]
     h_sequence = str(hsp.sbjct)
     h_start = hsp.sbjct_start
     h_end = hsp.sbjct_end
@@ -253,7 +253,7 @@ def get_hsps_coordinates(sample, hit_num):
     starting_set = set()
     hsps_range = set()
     for hsp in sample.alignments[hit_num].hsps:
-        _, h_frame = hsp.frame
+        h_frame = hsp.frame[1]
         h_start = hsp.sbjct_start
         h_end = hsp.sbjct_end
         h_len = sample.alignments[hit_num].length
