@@ -453,7 +453,7 @@ def protein_prediction(sample, hit_num):
         all_combination = 1
         for combination in list(itertools.product(*all_list_no_none)):
             all_combination += 1
-            if all_combination > 1500:
+            if all_combination > 15000:
                 break
             else:
                 test_seq = result_sequence[:]
@@ -467,6 +467,7 @@ def protein_prediction(sample, hit_num):
             return best
         else:
             return translation(result_sequence)
+            #TODO RETURN BEST HSP, not translated result sequence
     else:
         return translation(result_sequence)
 
