@@ -71,16 +71,22 @@ def read_genome(genome):
     return genomic_dict
 
 
-def translation(sequence, codons=None):
+def translation(sequence, codons=None, table1=None):
     """ Simple translation. X for ambiguous codons.
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
+    tr_table = trans_table
+    if table1:
+        tr_table = trans_table.copy()
+        tr_table["TAA"] = "*"
+        tr_table["TAG"] = "*"
+        tr_table["TGA"] = "*"
     if not codons:
         codons = [sequence[i:i + 3] for i in range(0, len(sequence) - 2, 3)]
     amino_acids = []
     for codon in codons:
-        if codon in trans_table:
-            amino_acids.append(trans_table[codon])
+        if codon in tr_table:
+            amino_acids.append(tr_table[codon])
         else:
             amino_acids.append('X')
     return ''.join(amino_acids)
@@ -308,7 +314,6 @@ def hsps_coordinates(sample, hit_num):
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
-
     n = 0
     iter_dict = {}
     for count, item in enumerate(pseudo_coordinates_sorted):
@@ -428,6 +433,12 @@ def best_hsp_seq(sample, contig_seq):
     hsp = sample.alignments[0].hsps[0]
     return contig_seq[hsp.sbjct_start:hsp.sbjct_end]
 
+def hsps_prot_seq(sample):
+    result = ""
+    for hsp in sample.alignments[0].hsps:
+        result += hsp.sbjct
+    return result.replace('-', '')
+
 
 def protein_prediction(sample, hit_num):
     """Return best protein predictions.
@@ -460,15 +471,24 @@ def protein_prediction(sample, hit_num):
         all_combination = 1
         for combination in list(itertools.product(*all_list_no_none)):
             all_combination += 1
-            if all_combination > 1500:
+            if all_combination > 15000:
                 break
             else:
                 test_seq = result_sequence[:]
                 for i in combination:
                     test_seq = test_seq.replace(i, '')
-                protein = translation(test_seq)
-                if '*' not in protein:
-                    best_candidates.append(protein)
+                codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
+                if len(stops.difference(set(codons_))) == len(stops):
+                    all_hsps_seqs = hsps_prot_seq(sample)
+                    protein_t1 = translation(test_seq, codons=codons_, table1=True)
+                    six_mers = [protein_t1[i:i + 6] for i in range(0, len(protein_t1) - 5, 6)]
+                    mismatches = 0
+                    for six_mer in six_mers:
+                        if six_mer not in all_hsps_seqs:
+                            mismatches += 1
+                    if len(protein_t1)*0.1 >= mismatches:
+                        protein = translation(test_seq, codons=codons_)
+                        best_candidates.append(protein)
         best = check_best_prediction(best_candidates, query_name)
         if best:
             return best
