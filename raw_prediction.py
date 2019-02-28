@@ -470,7 +470,7 @@ def protein_prediction(sample, hit_num):
         all_combination = 1
         for combination in itertools.product(*all_list_no_none):
             all_combination += 1
-            if all_combination > 20000:
+            if all_combination > 100000:
                 break
             else:
                 test_seq = result_sequence[:]
