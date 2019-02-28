@@ -11,6 +11,7 @@ import argparse
 from multiprocessing import Pool
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
+from Bio.Seq import Seq
 import itertools
 from Bio.pairwise2 import align
 from Bio.SubsMat import MatrixInfo as matlist
@@ -66,20 +67,26 @@ def read_genome(genome):
     Returns: {contig_name:seq} """
     genomic_dict = {}
     for contig in SeqIO.parse(genome, 'fasta'):
-        genomic_dict[contig.name] = contig.seq
+        genomic_dict[contig.name] = Seq(str(contig.seq).upper())
     return genomic_dict
 
 
-def translation(sequence, codons=None):
+def translation(sequence, codons=None, table1=None):
     """ Simple translation. X for ambiguous codons.
     Input: nucleotide sequence
     Returns: translated nucleotide sequence (str) """
+    tr_table = trans_table
+    if table1:
+        tr_table = trans_table.copy()
+        tr_table["TAA"] = "*"
+        tr_table["TAG"] = "*"
+        tr_table["TGA"] = "*"
     if not codons:
         codons = [sequence[i:i + 3] for i in range(0, len(sequence) - 2, 3)]
     amino_acids = []
     for codon in codons:
-        if codon in trans_table:
-            amino_acids.append(trans_table[codon])
+        if codon in tr_table:
+            amino_acids.append(tr_table[codon])
         else:
             amino_acids.append('X')
     return ''.join(amino_acids)
@@ -211,13 +218,12 @@ def in_frame_introns(hsp, contig_name, h_len):
 
         lower_distance = 500  # arbitrary used random high number
         # test combinations of potential introns
-        stops = {'TAG', 'TGA', 'TAA'}
         for combination in list(itertools.product(*potential_introns)):
             test_seq = str(contig_seq[h_start - 1:h_end])
             for i in combination:
                 test_seq = test_seq.replace(i, '')
             codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
-            if len(stops.difference(set(codons_))) == 3:
+            if len(stops.difference(set(codons_))) == len(stops):
                 protein = translation(test_seq, codons=codons_)
                 query_length = len(str(hsp.query).replace('-', ''))
                 for count, value in enumerate(combination):
@@ -308,7 +314,6 @@ def hsps_coordinates(sample, hit_num):
 
     pseudo_coordinates_sorted = sorted(pseudo_coordinates)
     query_coordinates = sorted(query_coordinates_unsorted)
-
     n = 0
     iter_dict = {}
     for count, item in enumerate(pseudo_coordinates_sorted):
@@ -424,6 +429,17 @@ def check_best_prediction(prot_sequences, query_name):
     return best_prediction.replace('-', '')
 
 
+def best_hsp_seq(sample, contig_seq):
+    hsp = sample.alignments[0].hsps[0]
+    return contig_seq[hsp.sbjct_start:hsp.sbjct_end]
+
+def hsps_prot_seq(sample):
+    result = ""
+    for hsp in sample.alignments[0].hsps:
+        result += hsp.sbjct
+    return result.replace('-', '')
+
+@profile
 def protein_prediction(sample, hit_num):
     """Return best protein predictions.
     Input: genome dict, sample - blast class from Biopython, hit_number
@@ -440,8 +456,10 @@ def protein_prediction(sample, hit_num):
     result_sequence = str(contig_seq[global_start - 1:global_end + 1])
     all_introns_no_none = ntrons_all_hsps(sample, hit_num)
 
+
     for sequence in all_introns_no_none:
         result_sequence = result_sequence.replace(sequence, '')
+
 
     if len(sample.alignments[0].hsps) > 1:
         all_list = get_all_inter_introns(coordinates, contig_seq)
@@ -459,15 +477,26 @@ def protein_prediction(sample, hit_num):
                 test_seq = result_sequence[:]
                 for i in combination:
                     test_seq = test_seq.replace(i, '')
-                protein = translation(test_seq)
-                if '*' not in protein:
-                    best_candidates.append(protein)
+                codons_ = [test_seq[i:i + 3] for i in range(0, len(test_seq) - 2, 3)]
+                if len(stops.difference(set(codons_))) == len(stops):
+                    all_hsps_seqs = hsps_prot_seq(sample)
+                    protein_t1 = translation(test_seq, codons=codons_, table1=True)
+                    six_mers = [protein_t1[i:i + 6] for i in range(0, len(protein_t1) - 5, 6)]
+                    mismatches = 0
+                    for six_mer in six_mers:
+                        if six_mer not in all_hsps_seqs:
+                            mismatches += 1
+                    if len(protein_t1)*0.05 >= mismatches:
+                        protein = translation(test_seq, codons=codons_)
+                        best_candidates.append(protein)
         best = check_best_prediction(best_candidates, query_name)
         if best:
             return best
         else:
-            return translation(result_sequence)
-            #TODO RETURN BEST HSP, not translated result sequence
+            best_hsp = str(best_hsp_seq(sample, contig_seq))
+            for sequence in all_introns_no_none:
+                best_hsp = best_hsp.replace(sequence, '')
+            return translation(best_hsp)
     else:
         return translation(result_sequence)
 
@@ -528,15 +557,22 @@ if __name__ == '__main__':
     parser.add_argument("--threads", type=int)
     parser.add_argument("--hits", type=int, help='number of hits for one protein')
     args = parser.parse_args()
+
+    stops = {'TAA', 'TAG','TGA'}
+
     if args.genetic_code:
         if ';' in args.genetic_code:
             alt_code = args.genetic_code.split(';')
             for i in alt_code:
                 splitted = i.split(':')
                 trans_table[splitted[0]] = splitted[1]
+                if splitted[0] in stops:
+                    stops.remove(splitted[0])
         else:
             splitted = args.genetic_code.split(':')
             trans_table[splitted[0]] = splitted[1]
+            if splitted[0] in stops:
+                stops.remove(splitted[0])
 
     threads = 1
     if args.threads:
