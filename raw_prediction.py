@@ -470,7 +470,7 @@ def protein_prediction(sample, hit_num):
         all_combination = 1
         for combination in itertools.product(*all_list_no_none):
             all_combination += 1
-            if all_combination > 100000:
+            if all_combination > 150000:
                 break
             else:
                 test_seq = result_sequence[:]
@@ -485,7 +485,7 @@ def protein_prediction(sample, hit_num):
                     for four_mer in four_mers:
                         if four_mer not in all_hsps_seqs:
                             mismatches += 1
-                    if len(protein_t1)*0.05 >= mismatches:
+                    if len(protein_t1)*0.03 >= mismatches:
                         protein = translation(test_seq, codons=codons_)
                         best_candidates.append(protein)
         best = check_best_prediction(best_candidates, query_name)
