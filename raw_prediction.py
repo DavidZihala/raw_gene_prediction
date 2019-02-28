@@ -439,7 +439,7 @@ def hsps_prot_seq(sample):
         result += hsp.sbjct
     return result.replace('-', '')
 
-
+@profile
 def protein_prediction(sample, hit_num):
     """Return best protein predictions.
     Input: genome dict, sample - blast class from Biopython, hit_number
@@ -471,7 +471,7 @@ def protein_prediction(sample, hit_num):
         all_combination = 1
         for combination in list(itertools.product(*all_list_no_none)):
             all_combination += 1
-            if all_combination > 15000:
+            if all_combination > 1500:
                 break
             else:
                 test_seq = result_sequence[:]
@@ -486,7 +486,7 @@ def protein_prediction(sample, hit_num):
                     for six_mer in six_mers:
                         if six_mer not in all_hsps_seqs:
                             mismatches += 1
-                    if len(protein_t1)*0.1 >= mismatches:
+                    if len(protein_t1)*0.05 >= mismatches:
                         protein = translation(test_seq, codons=codons_)
                         best_candidates.append(protein)
         best = check_best_prediction(best_candidates, query_name)
