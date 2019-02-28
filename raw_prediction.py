@@ -218,7 +218,7 @@ def in_frame_introns(hsp, contig_name, h_len):
 
         lower_distance = 500  # arbitrary used random high number
         # test combinations of potential introns
-        for combination in list(itertools.product(*potential_introns)):
+        for combination in itertools.product(*potential_introns):
             test_seq = str(contig_seq[h_start - 1:h_end])
             for i in combination:
                 test_seq = test_seq.replace(i, '')
