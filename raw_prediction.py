@@ -430,14 +430,17 @@ def check_best_prediction(prot_sequences, query_name):
 
 
 def best_hsp_seq(sample, contig_seq):
+    # TODO what about negative frame?
     hsp = sample.alignments[0].hsps[0]
     h_len = sample.alignments[0].length
     h_start = hsp.sbjct_start
     h_end = hsp.sbjct_end
     if hsp.frame[1] < 0:
         fake_start = h_start
-        h_start = h_len - h_end 
+        h_start = h_len - h_end
         h_end = h_len - fake_start + 1
+    else:
+        h_start = hsp.sbjct_start - 1
     return contig_seq[h_start:h_end]
 
 def hsps_prot_seq(sample):
