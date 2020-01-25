@@ -1,7 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """
-Script for raw (just blast based) protein predictions.
+Script for raw (only blast based) protein predictions.
 recommended  blast options: -outfmt 5 -gapopen 11 -gapextend 2
 -dust no -soft_masking
 """
@@ -431,7 +431,14 @@ def check_best_prediction(prot_sequences, query_name):
 
 def best_hsp_seq(sample, contig_seq):
     hsp = sample.alignments[0].hsps[0]
-    return contig_seq[hsp.sbjct_start:hsp.sbjct_end]
+    h_len = sample.alignments[0].length
+    h_start = hsp.sbjct_start
+    h_end = hsp.sbjct_end
+    if hsp.frame[1] < 0:
+        fake_start = h_start
+        h_start = h_len - h_end 
+        h_end = h_len - fake_start + 1
+    return contig_seq[h_start:h_end]
 
 def hsps_prot_seq(sample):
     result = ""
@@ -444,7 +451,7 @@ def protein_prediction(sample, hit_num):
     Input: genome dict, sample - blast class from Biopython, hit_number
     Returns: best protein prediction (protein sequence) """
     query_name = sample.query
-    contig_name = sample.alignments[hit_num].hit_id
+    contig_name = sample.alignments[hit_num].hit_id.split()[0]
     if '|' in contig_name:
         contig_name = contig_name.split('|')[1]
     _, h_frame = sample.alignments[hit_num].hsps[0].frame
@@ -452,7 +459,7 @@ def protein_prediction(sample, hit_num):
 
     coordinates, global_start, global_end = hsps_coordinates(sample,
                                                              hit_num)
-    result_sequence = str(contig_seq[global_start - 1:global_end + 1])
+    result_sequence = str(contig_seq[global_start - 1:global_end + 1]) #tady je to jeste dobre
     all_introns_no_none = ntrons_all_hsps(sample, hit_num)
 
 
@@ -501,6 +508,7 @@ def protein_prediction(sample, hit_num):
 
 
 def final(gene):
+    print(gene)
     samples = gene_dict[gene].blast_hits
     contig_dict = {}
     result = []
@@ -513,7 +521,7 @@ def final(gene):
                 if contig not in contig_dict and '*' not in seq:
                     contig_dict[contig] = seq
                 elif '*' in seq:
-                    pass
+                    pass # ???
                 else:
                     if len(seq) > len(contig_dict[contig]) and '*' not in seq:
                         contig_dict[contig] = seq
@@ -533,11 +541,17 @@ def main():
             gene_dict[gene_name].add_blast(blast_record)
 
     with open(args.output, 'w') as res:
-        # for k, v in gene_dict.items():
-        #     finale(k)
-        with Pool(processes=threads) as p:
-            max_ = len(gene_dict)
-            r = list(tqdm(p.imap(final, gene_dict), total=max_))
+        # with Pool(processes=threads) as p:
+        #     max_ = len(gene_dict)
+        #     r = list(tqdm(p.imap(final, gene_dict), total=max_))
+
+
+        # debugging
+        r = []
+        for i in gene_dict:
+            r.append(final(i))
+        # ########
+
         for record in r:
             if len(record) > 0:
                 for i in record:
