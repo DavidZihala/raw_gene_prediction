@@ -1,8 +1,7 @@
 # raw_gene_prediction
 
 Script for raw (only blast based) protein prediction.
-1. run blast
-recommended  blast options: `-outfmt 5 -gapopen 11 -gapextend 2
+1. run blast with recommended  blast options: `-outfmt 5 -gapopen 11 -gapextend 2
 -dust no -soft_masking`
 
 2. run raw_gene_prediction
