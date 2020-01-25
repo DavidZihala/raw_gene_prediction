@@ -9,9 +9,8 @@ Script for raw (only blast based) protein prediction.
 ## usage
 `./raw_prediction.py query_seqs genome blast_output short_name output`
 
-optional arguments:
-  --genetic-code GENETIC_CODE
-                        altrnative genetic code in a form: "TAA:Q;TAG:Q"
-  --threads THREADS     number of threads
-  --hits HITS           number of hits for one protein
-
+optional arguments: \
+  `--genetic-code GENETIC_CODE`
+                        altrnative genetic code in a form: "TAA:Q;TAG:Q" \
+  `--threads THREADS`     number of threads \
+  `--hits HITS`           number of hits for one protein
