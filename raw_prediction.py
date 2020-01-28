@@ -25,7 +25,6 @@ def timer(original_function):
         func = original_function(*args, **kwargs)
         end = time()
         elapsed = end - start
-        print(elapsed)
         return func
     return wrapper_func
 
@@ -511,7 +510,6 @@ def protein_prediction(sample, hit_num):
 
 
 def final(gene):
-    print(gene)
     samples = gene_dict[gene].blast_hits
     contig_dict = {}
     result = []
@@ -544,15 +542,15 @@ def main():
             gene_dict[gene_name].add_blast(blast_record)
 
     with open(args.output, 'w') as res:
-        # with Pool(processes=threads) as p:
-        #     max_ = len(gene_dict)
-        #     r = list(tqdm(p.imap(final, gene_dict), total=max_))
+        with Pool(processes=threads) as p:
+            max_ = len(gene_dict)
+            r = list(tqdm(p.imap(final, gene_dict), total=max_))
 
 
         # debugging
-        r = []
-        for i in gene_dict:
-            r.append(final(i))
+        # r = []
+        # for i in gene_dict:
+        #     r.append(final(i))
         # ########
 
         for record in r:
